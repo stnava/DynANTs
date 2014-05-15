@@ -448,6 +448,7 @@ if [[ $DEBUG_MODE -gt 0 ]];
 
 for (( i = 0; i < ${#ANATOMICAL_IMAGES[@]}; i++ ))
   do
+  echo check image ${ANATOMICAL_IMAGES[$i]}
   if [[ ! -f ${ANATOMICAL_IMAGES[$i]} ]];
     then
       echo "The specified image \"${ANATOMICAL_IMAGES[$i]}\" does not exist."
@@ -470,6 +471,11 @@ if [[ ! -f ${EXTRACTION_PRIOR} ]];
 
 ##########################################################################
 # 0. as preprocessing, run all data through ACT
+if [[ ! $OUTPUT_PREFIX ]] ; then 
+  echo creating output directory $OUTPUT_PREFIX
+  mkdir -p $OUTPUT_PREFIX
+fi
+exit
 
 if [[ ! -s SSTtemplate0.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)

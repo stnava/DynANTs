@@ -1,0 +1,15 @@
+dim=3
+dir=$PWD/
+# define time points
+outputdirectory=test
+i=${dir}braindata/118678/20140127/T1/118678_20140127_T1.nii.gz
+j=${dir}braindata/118678/20140415/T1/118678_20140415_T1.nii.gz
+imglist=" $i $j "
+echo $imglist
+bash ./scripts/dynANTs.sh  -d $dim \
+  -e template/T_template0.nii.gz \
+  -m template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
+  -f template/T_template0_BrainCerebellumExractionMask.nii.gz \
+  -p template/Priors/priors%d.nii.gz \
+  -o $outputdirectory \
+  -a $i -a $j 
