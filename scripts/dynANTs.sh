@@ -418,8 +418,6 @@ if [[ $DEBUG_MODE -gt 0 ]];
 
    echo "    WARNING - Running in test / debug mode. Results will be suboptimal "
 
-   OUTPUT_PREFIX="${OUTPUT_PREFIX}testMode_"
-
    # Speed up by doing fewer its. Careful about changing this because
    # certain things are hard coded elsewhere, eg number of levels
 
@@ -477,10 +475,12 @@ if [[ ! -s $OUTPUT_PREFIX ]] ; then
 fi
 cd $OUTPUT_PREFIX
 dim=$DIMENSION
+ls
+
 if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
-antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b $KEEP_TMP_IMAGES \
+  antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b $KEEP_TMP_IMAGES \
   -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
   -n 0 -r 0  -l 1 -m MI -t SyN \
   -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]}
@@ -497,6 +497,7 @@ SSTPRE=SST
 if [[ $DEBUG_MODE == 1 ]] ; then 
   SSTPRE=SSTtestMode_
 fi
+
 if [[ ! -s ${SST_DIR}/${SSTPRE}CorticalThickness.nii.gz ]] ; then 
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
     -a SSTtemplate0.nii.gz \
@@ -528,8 +529,8 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   fi
   let ct=$ct+1
 done 
-
-exit
+echo now compose maps ...
+if [[ 1 == 0 ]] ; then 
 # 4. build composite transformations from timepoints to template
 # for each timepoint - fwd and inverse 
 ct=0
@@ -538,6 +539,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsApplyTransforms  # inv
   let ct=$ct+1
 done
-##########################################################################
-########################***********done***********########################
-##########################################################################
+fi
+echo "##########################################################################"
+echo "########################***********done***********########################"
+echo "##########################################################################"
