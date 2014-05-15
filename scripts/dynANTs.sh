@@ -477,7 +477,7 @@ if [[ ! -s $OUTPUT_PREFIX ]] ; then
 fi
 cd $OUTPUT_PREFIX
 dim=$DIMENSION
-if [[ ! -s SSTtemplate0.nii.gz ]] ; then 
+if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
 antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 \
