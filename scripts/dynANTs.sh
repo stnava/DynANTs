@@ -471,24 +471,25 @@ if [[ ! -f ${EXTRACTION_PRIOR} ]];
 
 ##########################################################################
 # 0. as preprocessing, run all data through ACT
-if [[ ! $OUTPUT_PREFIX ]] ; then 
+if [[ ! -s $OUTPUT_PREFIX ]] ; then 
   echo creating output directory $OUTPUT_PREFIX
   mkdir -p $OUTPUT_PREFIX
 fi
-exit
-
+cd $OUTPUT_PREFIX
+dim=$DIMENSION
 if [[ ! -s SSTtemplate0.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
 antsMultivariateTemplateConstruction2.sh -d $dim -o TEST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 \
   -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
   -n 0 -r 0  -l 1 -m MI -t SyN \
-  -z $i  $imglist
+  -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]}
   N3BiasFieldCorrection 3 SSTtemplate0.nii.gz   SSTtemplate0N3.nii.gz 8
   N3BiasFieldCorrection 3 SSTtemplate0N3.nii.gz SSTtemplate0N3.nii.gz 4
 fi
 echo SST is built
-
+exit 
+# need to modify params below
 # 2. run the SST through ACT to a group template
 DATA_DIR=${PWD}
 TEMPLATE_DIR=./ADNI_3T/Normal/

@@ -1,7 +1,7 @@
 dim=3
 dir=$PWD/
 # define time points
-outputdirectory=test
+outputdirectory=dynantstest
 i=${dir}braindata/118678/20140127/T1/118678_20140127_T1.nii.gz
 j=${dir}braindata/118678/20140415/T1/118678_20140415_T1.nii.gz
 imglist=" $i $j "
