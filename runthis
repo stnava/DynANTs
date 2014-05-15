@@ -7,9 +7,9 @@ j=${dir}braindata/118678/20140415/T1/118678_20140415_T1.nii.gz
 imglist=" $i $j "
 echo $imglist
 bash ./scripts/dynANTs.sh  -d $dim \
-  -e template/T_template0.nii.gz \
-  -m template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
-  -f template/T_template0_BrainCerebellumExractionMask.nii.gz \
-  -p template/Priors/priors%d.nii.gz \
+  -e ${dir}template/T_template0.nii.gz \
+  -m ${dir}template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
+  -f ${dir}template/T_template0_BrainCerebellumExractionMask.nii.gz \
+  -p ${dir}template/Priors/priors%d.nii.gz \
   -o $outputdirectory \
   -a $i -a $j 

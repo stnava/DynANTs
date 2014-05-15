@@ -480,19 +480,17 @@ dim=$DIMENSION
 if [[ ! -s SSTtemplate0.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
-antsMultivariateTemplateConstruction2.sh -d $dim -o TEST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 \
+antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 \
   -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
   -n 0 -r 0  -l 1 -m MI -t SyN \
   -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]}
   N3BiasFieldCorrection 3 SSTtemplate0.nii.gz   SSTtemplate0N3.nii.gz 8
   N3BiasFieldCorrection 3 SSTtemplate0N3.nii.gz SSTtemplate0N3.nii.gz 4
 fi
-echo SST is built
-exit 
+echo SST is built --- now prior-based act with  $SEGMENTATION_PRIOR
+
 # need to modify params below
 # 2. run the SST through ACT to a group template
-DATA_DIR=${PWD}
-TEMPLATE_DIR=./ADNI_3T/Normal/
 SST_DIR=./SST_ACT
 mkdir -p ${SST_DIR}
 DOTEST=1
@@ -500,10 +498,10 @@ SSTPRE=SSTtestMode_
 if [[ ! -s ${SST_DIR}/${SSTPRE}CorticalThickness.nii.gz ]] ; then 
   antsCorticalThickness.sh -d $dim -z $DOTEST \
     -a SSTtemplate0.nii.gz \
-    -e ${TEMPLATE_DIR}T_template0.nii.gz \
-    -f ${TEMPLATE_DIR}T_template0_BrainCerebellumExractionMask.nii.gz \
-    -m ${TEMPLATE_DIR}T_template0_BrainCerebellumProbabilityMask.nii.gz  \
-    -p ${TEMPLATE_DIR}Priors/priors%d.nii.gz \
+    -e $BRAIN_TEMPLATE \
+    -f $EXTRACTION_REGISTRATION_MASK \
+    -m $EXTRACTION_PRIOR  \
+    -p $SEGMENTATION_PRIOR \
     -o ${SST_DIR}/SST
 fi
 echo SST ACT is done 
@@ -513,7 +511,7 @@ echo SST ACT is done
 ct=0
 # below may not be necessary
 cp ${SST_DIR}/${SSTPRE}BrainExtractionMask.nii.gz ${SST_DIR}/${SSTPRE}BrainExtractionMask2.nii.gz
-for img in $imglist ; do 
+for img in ${ANATOMICAL_IMAGES[@]} ; do 
   OUT_DIR=subject_${ct}_long
   mkdir -p $OUT_DIR
   SUBPRE=subject_${ct}_longtestMode_
@@ -533,7 +531,7 @@ exit
 # 4. build composite transformations from timepoints to template
 # for each timepoint - fwd and inverse 
 ct=0
-for img in $imglist ; do
+for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsApplyTransforms  # fwd
   antsApplyTransforms  # inv
   let ct=$ct+1
