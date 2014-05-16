@@ -532,12 +532,23 @@ done
 
 # 4. build composite transformations from timepoints to template
 # for each timepoint - fwd and inverse 
-if [[ 1 == 0 ]] ; then 
+if [[ 1 == 1 ]] ; then 
 echo now compose maps ...
 ct=0
+locpre=${SST_DIR}/${SSTPRE}
 for img in ${ANATOMICAL_IMAGES[@]} ; do
-  antsApplyTransforms  # fwd
-  antsApplyTransforms  # inv
+  totem=" -t [${locpre}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
+          -t  ${locpre}BrainSegmentationPrior1InverseWarp.nii.gz 
+          -t [subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior0GenericAffine.mat,1] 
+          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior1InverseWarp.nii.gz"
+  toind=" -t ${locpre}BrainSegmentationPrior1Warp.nii.gz 
+          -t ${locpre}BrainSegmentationPrior0GenericAffine.mat 
+          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior1Warp.nii.gz 
+          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior0GenericAffine.mat "
+  antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [to_template${ct}Warp.nii.gz, 1 ] # fwd
+  antsApplyTransforms -d $dim -r $img            $toind -o [ to_subject${ct}Warp.nii.gz, 1 ] # inv
+  thk=./subject_${ct}_long/subject_${ct}_longCorticalThickness.nii.gz
+  antsApplyTransforms -d $dim -i $thk -r $BRAIN_TEMPLATE $totem -o thk${ct}totemplate.nii.gz # fwd
   let ct=$ct+1
 done
 fi
