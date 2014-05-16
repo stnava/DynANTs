@@ -269,7 +269,7 @@ OUTPUT_DIR=${CURRENT_DIR}/tmp$RANDOM/
 OUTPUT_PREFIX=${OUTPUT_DIR}/tmp
 OUTPUT_SUFFIX="nii.gz"
 
-KEEP_TMP_IMAGES=0
+KEEP_TMP_IMAGES=1
 
 DIMENSION=3
 
@@ -480,7 +480,7 @@ ls
 if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
-  antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b $KEEP_TMP_IMAGES \
+  antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b 0 \
   -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
   -n 0 -r 0  -l 1 -m MI -t SyN \
   -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]}
@@ -529,10 +529,11 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   fi
   let ct=$ct+1
 done 
-echo now compose maps ...
-if [[ 1 == 0 ]] ; then 
+
 # 4. build composite transformations from timepoints to template
 # for each timepoint - fwd and inverse 
+if [[ 1 == 0 ]] ; then 
+echo now compose maps ...
 ct=0
 for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsApplyTransforms  # fwd
