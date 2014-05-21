@@ -532,7 +532,7 @@ done
 
 # 4. build composite transformations from timepoints to template
 # for each timepoint - fwd and inverse 
-if [[ 1 == 1 ]] ; then 
+if [[ $KEEP_TMP_IMAGES -eq 1 ]] ; then 
 echo now compose maps ...
 ct=0
 locpre=${SST_DIR}/${SSTPRE}
