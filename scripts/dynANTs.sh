@@ -548,7 +548,10 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [to_template${ct}Warp.nii.gz, 1 ] # fwd
   antsApplyTransforms -d $dim -r $img            $toind -o [ to_subject${ct}Warp.nii.gz, 1 ] # inv
   thk=./subject_${ct}_long/subject_${ct}_longCorticalThickness.nii.gz
-  antsApplyTransforms -d $dim -i $thk -r $BRAIN_TEMPLATE $totem -o thk${ct}totemplate.nii.gz # fwd
+  antsApplyTransforms -d $dim -i $thk                  -r $BRAIN_TEMPLATE $totem -o thk${ct}totemplate.nii.gz # fwd
+  if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then 
+  antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o subject_${ct}_long/subject_${ct}_long_Label.nii.gz -n NearestNeighbor
+  fi
   let ct=$ct+1
 done
 fi
