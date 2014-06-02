@@ -545,12 +545,16 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
           -t ${locpre}BrainSegmentationPrior0GenericAffine.mat 
           -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior1Warp.nii.gz 
           -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior0GenericAffine.mat "
-  antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [to_template${ct}Warp.nii.gz, 1 ] # fwd
-  antsApplyTransforms -d $dim -r $img            $toind -o [ to_subject${ct}Warp.nii.gz, 1 ] # inv
+  if [[ ! -s to_template${ct}Warp.nii.gz  ]]  ; then
+    antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [to_template${ct}Warp.nii.gz, 1 ] # fwd
+  fi
+  if [[ ! -s  to_subject${ct}Warp.nii.gz  ]]  ; then
+    antsApplyTransforms -d $dim -r $img            $toind -o [ to_subject${ct}Warp.nii.gz, 1 ] # inv
+  fi
   thk=./subject_${ct}_long/subject_${ct}_longCorticalThickness.nii.gz
   antsApplyTransforms -d $dim -i $thk                  -r $BRAIN_TEMPLATE $totem -o thk${ct}totemplate.nii.gz # fwd
   if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then 
-  antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o subject_${ct}_long/subject_${ct}_long_Label.nii.gz -n NearestNeighbor
+  antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o subject_${ct}_long/subject_${ct}_long_Label.nii.gz -n MultiLabel
   fi
   let ct=$ct+1
 done
