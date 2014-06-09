@@ -510,6 +510,18 @@ fi
 echo SST ACT is done 
 
 # 3. run the time point images through ACT with the SST as template
+# 3b. rigidly pre-align to SST
+rigidprealign=1
+if [[ $rigidprealign -eq 1 ]] ; then
+  ct=0
+  for img in ${ANATOMICAL_IMAGES[@]} ; do 
+    SUBPRE=subject_${ct}_long
+    mkdir -p $SUBPRE
+    antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $img -o ${SUBPRE}/${SUBPRE}_rigid  -t a
+    let ct=$ct+1
+  done
+fi
+
 # maybe should smooth posteriors before using them as priors ...
 ct=0
 # below may not be necessary
@@ -517,15 +529,21 @@ cp ${SST_DIR}/${SSTPRE}BrainExtractionMask.nii.gz ${SST_DIR}/${SSTPRE}BrainExtra
 for img in ${ANATOMICAL_IMAGES[@]} ; do 
   OUT_DIR=subject_${ct}_long
   mkdir -p $OUT_DIR
-  SUBPRE=subject_${ct}_longtestMode_
+  SUBPRE=subject_${ct}_long
+  rigimg=${OUT_DIR}/${SUBPRE}_rigidWarped.nii.gz
+  if [[ -s $rigimg ]] ; then 
+    img=$rigimg
+    echo using $img rigidly prealigned 
+  fi
   if [[ ! -s ${OUT_DIR}/${SUBPRE}CorticalThickness.nii.gz ]] ; then 
     antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
       -a $img \
+      -w 0.5  \
       -e SSTtemplate0N3.nii.gz \
       -m ${SST_DIR}/${SSTPRE}BrainExtractionMask.nii.gz  \
       -f ${SST_DIR}/${SSTPRE}BrainExtractionMask2.nii.gz  \
       -p ${SST_DIR}/${SSTPRE}BrainSegmentationPosteriors%d.nii.gz \
-      -o ${OUT_DIR}/subject_${ct}_long
+      -o ${OUT_DIR}/${SUBPRE}
   fi
   let ct=$ct+1
 done 
