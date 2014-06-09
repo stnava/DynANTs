@@ -516,8 +516,11 @@ if [[ $rigidprealign -eq 1 ]] ; then
   ct=0
   for img in ${ANATOMICAL_IMAGES[@]} ; do 
     SUBPRE=subject_${ct}_long
+    rigimg=${OUT_DIR}/${SUBPRE}_rigidWarped.nii.gz
     mkdir -p $SUBPRE
-    antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $img -o ${SUBPRE}/${SUBPRE}_rigid  -t a
+    N3BiasFieldCorrection 3 $img    $rigimg 8
+    N3BiasFieldCorrection 3 $rigimg $rigimg 4
+    antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $rigimg -o ${SUBPRE}/${SUBPRE}_rigid  -t r
     let ct=$ct+1
   done
 fi
