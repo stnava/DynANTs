@@ -518,9 +518,11 @@ if [[ $rigidprealign -eq 1 ]] ; then
     SUBPRE=subject_${ct}_long
     mkdir -p $SUBPRE
     rigimg=${SUBPRE}/${SUBPRE}_rigidWarped.nii.gz
-    N3BiasFieldCorrection 3 $img    $rigimg 8
-    N3BiasFieldCorrection 3 $rigimg $rigimg 4
-    antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $rigimg -o ${SUBPRE}/${SUBPRE}_rigid  -t r
+    if [[ ! -s $rigimg ]] ; then
+      N3BiasFieldCorrection 3 $img    $rigimg 8
+      N3BiasFieldCorrection 3 $rigimg $rigimg 4
+      antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $rigimg -o ${SUBPRE}/${SUBPRE}_rigid  -t r
+    fi
     let ct=$ct+1
   done
 fi
