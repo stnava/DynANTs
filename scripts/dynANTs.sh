@@ -51,7 +51,7 @@ Usage:
               -m brainProbabilityMask
               -p brainSegmentationPriors
               <OPTARGS>
-              -o outputPrefix
+              -o outputPrefixes
 
 Example:
 
@@ -85,7 +85,9 @@ We use *label* to denote a label image with values in range 0 to N.
                                                   2:  cortical gm
                                                   3:  wm
                                                   4:  deep gm
-     -o:  Output prefix                         The following images are created:
+     -o:  Output prefix                         Should be of the form  BaseName/Time0Name/Time1Name/etcetera
+                                                OUTPUT_PREFIX_FOR_TIMEPOINT=BaseName_Time0Name
+                                                The following images are created:
                                                   * ${OUTPUT_PREFIX}BrainExtractionMask.${OUTPUT_SUFFIX}
                                                   * ${OUTPUT_PREFIX}BrainSegmentation.${OUTPUT_SUFFIX}
                                                   * ${OUTPUT_PREFIX}BrainSegmentation*N4.${OUTPUT_SUFFIX} One for each anatomical input
@@ -413,6 +415,7 @@ else
   done
 fi
 
+
 if [[ $DEBUG_MODE -gt 0 ]];
   then
 
@@ -438,12 +441,33 @@ if [[ $DEBUG_MODE -gt 0 ]];
 ################################################################################
 #
 # Preliminaries:
+#  0. Check that output prefix is correctly formed
 #  1. Check existence of inputs
 #  2. Figure out output directory and mkdir if necessary
 #  3. See if $REGISTRATION_TEMPLATE is the same as $BRAIN_TEMPLATE
 #
 ################################################################################
 
+nimg=${#ANATOMICAL_IMAGES[@]}
+let nimgp1=$nimg+2
+OUTPUT_PREFIX_VEC=()
+basedir=`echo $OUTPUT_PREFIX | cut -d "," -f 1 `
+baseID=`echo $OUTPUT_PREFIX | cut -d "," -f 2 `
+for (( i = 2; i < nimgp1; i++ )); do
+  let j=$i+1
+  newentry=`echo $OUTPUT_PREFIX | cut -d "," -f $j `
+  echo make output directory ${basedir}/${baseID}/${newentry}/
+  mkdir -p ${basedir}/${baseID}/${newentry}/
+#  mkdir -p ${basedir}/${baseID}/${newentry}/
+  OUTPUT_PREFIX_VEC=("${OUTPUT_PREFIX_VEC[@]}" ${basedir}/${baseID}/${newentry}/${baseID}_${newentry} )
+done
+echo OUTPUT_PREFIX_VEC is ${OUTPUT_PREFIX_VEC[@]} of length ${#OUTPUT_PREFIX_VEC[@]}
+if [[ ${#OUTPUT_PREFIX_VEC[@]} != $nimg ]] ; then 
+  echo output variable poorly formed $OUTPUT_PREFIX
+  echo OUTPUT_PREFIX should be of form  RootDir,SubjectID,TimeValue1,TimeValue2,...,TimeValueN
+  echo and the number of entries beyond SubjectID should match the number of images
+  exit 1
+fi
 for (( i = 0; i < ${#ANATOMICAL_IMAGES[@]}; i++ ))
   do
   echo check image ${ANATOMICAL_IMAGES[$i]}
@@ -469,62 +493,61 @@ if [[ ! -f ${EXTRACTION_PRIOR} ]];
 
 ##########################################################################
 # 0. as preprocessing, run all data through ACT
+OUTPUT_PREFIX=${basedir}/${baseID}/
 if [[ ! -s $OUTPUT_PREFIX ]] ; then 
   echo creating output directory $OUTPUT_PREFIX
   mkdir -p $OUTPUT_PREFIX
 fi
-cd $OUTPUT_PREFIX
 dim=$DIMENSION
-ls
-
-if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
+SST=${basedir}/${baseID}/${baseID}_SST
+if [[ ! -s ${SST}template0N3.nii.gz ]] ; then 
 # 1. build a template from your ACT'd data to create a single subject template (SST)
 # n4 was already done so -n 0 , also use the first volume as a starting point 
-  antsMultivariateTemplateConstruction2.sh -d $dim -o SST  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b 0 -a 0 \
-  -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
-  -n 0 -r 0  -l 1 -m MI -t SyN \
-  -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]}
-  N3BiasFieldCorrection 3 SSTtemplate0.nii.gz   SSTtemplate0N3.nii.gz 8
-  N3BiasFieldCorrection 3 SSTtemplate0N3.nii.gz SSTtemplate0N3.nii.gz 4
+  antsMultivariateTemplateConstruction2.sh -d $dim -o ${SST}  -i 4 -g 0.25  -j 0  -c 0 -k 1 -w 1 -e 0 -b 0 -a 0 \
+    -f 8x4x2x1 -s 3x2x1x0 -q 100x70x50x3 \
+    -n 0 -r 0  -l 1 -m MI -t SyN \
+    -z ${ANATOMICAL_IMAGES[0]}  ${ANATOMICAL_IMAGES[@]} 
+  N3BiasFieldCorrection 3 ${SST}template0.nii.gz   ${SST}template0N3.nii.gz 8
+  N3BiasFieldCorrection 3 ${SST}template0N3.nii.gz ${SST}template0N3.nii.gz 4
 fi
-if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
-  echo SSTtemplate0N3.nii.gz is not built - exiting!
+if [[ ! -s ${SST}template0N3.nii.gz ]] ; then 
+  echo ${SST}template0N3.nii.gz is not built - exiting!
   exit 1  
 fi
-echo SST is built --- now prior-based act with  $SEGMENTATION_PRIOR
+echo ${SST} is built --- now prior-based act with  $SEGMENTATION_PRIOR
 # need to modify params below
 # 2. run the SST through ACT to a group template
-SST_DIR=./SST_ACT
+SST_DIR=${basedir}/${baseID}/${baseID}_SST_ACT/
 mkdir -p ${SST_DIR}
-SSTPRE=SST
-if [[ $DEBUG_MODE == 1 ]] ; then 
-  SSTPRE=SSTtestMode_
-fi
-
-if [[ ! -s ${SST_DIR}/${SSTPRE}CorticalThickness.nii.gz ]] ; then 
+SSTACT=${SST_DIR}/${baseID}_SST_ACT
+######################################################
+if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
-    -a SSTtemplate0.nii.gz \
+    -a ${SST}template0.nii.gz \
     -e $BRAIN_TEMPLATE \
     -f $EXTRACTION_REGISTRATION_MASK \
     -m $EXTRACTION_PRIOR  \
     -p $SEGMENTATION_PRIOR \
-    -o ${SST_DIR}/SST
+    -o ${SSTACT}
 fi
-echo SST ACT is done 
-
+if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
+  echo SST ACT failed to produce ${SSTACT}CorticalThickness.nii.gz 
+  exit 1
+else 
+  echo SST ACT is done and completed successfully
+fi
 # 3. run the time point images through ACT with the SST as template
 # 3b. rigidly pre-align to SST
 rigidprealign=1
 if [[ $rigidprealign -eq 1 ]] ; then
   ct=0
   for img in ${ANATOMICAL_IMAGES[@]} ; do 
-    SUBPRE=subject_${ct}_long
-    mkdir -p $SUBPRE
-    rigimg=${SUBPRE}/${SUBPRE}_rigidWarped.nii.gz
+    SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
+    rigimg=${SUBPRE}_rigidWarped.nii.gz
     if [[ ! -s $rigimg ]] ; then
       N3BiasFieldCorrection 3 $img    $rigimg 8
       N3BiasFieldCorrection 3 $rigimg $rigimg 4
-      antsRegistrationSyN.sh -d 3 -f SSTtemplate0N3.nii.gz -m $rigimg -o ${SUBPRE}/${SUBPRE}_rigid  -t r
+      antsRegistrationSyN.sh -d 3 -f ${SST}template0N3.nii.gz -m $rigimg -o ${SUBPRE}_rigid  -t r
     fi
     let ct=$ct+1
   done
@@ -533,12 +556,10 @@ fi
 # maybe should smooth posteriors before using them as priors ...
 ct=0
 # below may not be necessary
-cp ${SST_DIR}/${SSTPRE}BrainExtractionMask.nii.gz ${SST_DIR}/${SSTPRE}BrainExtractionMask2.nii.gz
+cp ${SSTACT}BrainExtractionMask.nii.gz ${SSTACT}BrainExtractionMask2.nii.gz
 for img in ${ANATOMICAL_IMAGES[@]} ; do 
-  OUT_DIR=subject_${ct}_long
-  mkdir -p $OUT_DIR
-  SUBPRE=subject_${ct}_long
-  rigimg=${OUT_DIR}/${SUBPRE}_rigidWarped.nii.gz
+  SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
+  rigimg=${SUBPRE}_rigidWarped.nii.gz
   if [[ -s $rigimg ]] ; then 
     img=$rigimg
     echo using $img rigidly prealigned 
@@ -547,11 +568,11 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
       -a $img \
       -w 0.5  \
-      -e SSTtemplate0N3.nii.gz \
-      -m ${SST_DIR}/${SSTPRE}BrainExtractionMask.nii.gz  \
-      -f ${SST_DIR}/${SSTPRE}BrainExtractionMask2.nii.gz  \
-      -p ${SST_DIR}/${SSTPRE}BrainSegmentationPosteriors%d.nii.gz \
-      -o ${OUT_DIR}/${SUBPRE}
+      -e ${SST}template0N3.nii.gz \
+      -m ${SSTACT}BrainExtractionMask.nii.gz  \
+      -f ${SSTACT}BrainExtractionMask2.nii.gz  \
+      -p ${SSTACT}BrainSegmentationPosteriors%d.nii.gz \
+      -o ${SUBPRE}
   let ct=$ct+1
 done 
 
@@ -560,27 +581,27 @@ done
 if [[ $KEEP_TMP_IMAGES -eq 1 ]] ; then 
 echo now compose maps ...
 ct=0
-locpre=${SST_DIR}/${SSTPRE}
 for img in ${ANATOMICAL_IMAGES[@]} ; do
-  totem=" -t [${locpre}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
-          -t  ${locpre}BrainSegmentationPrior1InverseWarp.nii.gz 
-          -t [subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior0GenericAffine.mat,1] 
-          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior1InverseWarp.nii.gz"
-  toind=" -t ${locpre}BrainSegmentationPrior1Warp.nii.gz 
-          -t ${locpre}BrainSegmentationPrior0GenericAffine.mat 
-          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior1Warp.nii.gz 
-          -t subject_${ct}_long/subject_${ct}_longBrainSegmentationPrior0GenericAffine.mat "
-  if [[ ! -s to_template${ct}Warp.nii.gz  ]]  ; then
-    antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [to_template${ct}Warp.nii.gz, 1 ] # fwd
+  SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
+  totem=" -t [${SSTACT}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
+          -t  ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
+          -t [${SUBPRE}BrainSegmentationPrior0GenericAffine.mat,1] 
+          -t ${SUBPRE}BrainSegmentationPrior1InverseWarp.nii.gz"
+  toind=" -t ${SSTACT}BrainSegmentationPrior1Warp.nii.gz 
+          -t ${SSTACT}BrainSegmentationPrior0GenericAffine.mat 
+          -t ${SUBPRE}BrainSegmentationPrior1Warp.nii.gz 
+          -t ${SUBPRE}BrainSegmentationPrior0GenericAffine.mat "
+  if [[ ! -s ${SUBPRE}_to_templateWarp.nii.gz ]]  ; then
+    antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [${SUBPRE}_to_templateWarp.nii.gz, 1 ] # fwd
   fi
-  if [[ ! -s  to_subject${ct}Warp.nii.gz  ]]  ; then
-    antsApplyTransforms -d $dim -r $img            $toind -o [ to_subject${ct}Warp.nii.gz, 1 ] # inv
+  if [[ ! -s ${SUBPRE}_to_subjectWarp.nii.gz  ]]  ; then
+    antsApplyTransforms -d $dim -r $img            $toind -o [${SUBPRE}_to_subjectWarp.nii.gz , 1 ] # inv
   fi
-  thk=./subject_${ct}_long/subject_${ct}_longCorticalThickness.nii.gz
-  antsApplyTransforms -d $dim -i $thk                  -r $BRAIN_TEMPLATE $totem -o thk${ct}totemplate.nii.gz # fwd
+  thk=${SUBPRE}CorticalThickness.nii.gz
+  antsApplyTransforms -d $dim -i $thk -r $BRAIN_TEMPLATE $totem -o ${SUBPRE}ThicknessToGroupTemplate.nii.gz # fwd
   if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then 
-    antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o subject_${ct}_long/subject_${ct}_long_Label.nii.gz -n MultiLabel
-    ImageMath 3 subject_${ct}_long/subject_${ct}_long_LabelThickness.csv LabelStats subject_${ct}_long/subject_${ct}_long_Label.nii.gz $thk
+    antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o ${SUBPRE}_Label.nii.gz -n MultiLabel
+    ImageMath 3 ${SUBPRE}_LabelThickness.csv LabelStats ${SUBPRE}_Label.nii.gz $thk
   fi
   let ct=$ct+1
 done
