@@ -487,8 +487,11 @@ if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then
   N3BiasFieldCorrection 3 SSTtemplate0.nii.gz   SSTtemplate0N3.nii.gz 8
   N3BiasFieldCorrection 3 SSTtemplate0N3.nii.gz SSTtemplate0N3.nii.gz 4
 fi
+if [[ ! -s SSTtemplate0N3.nii.gz ]] ; then 
+  echo SSTtemplate0N3.nii.gz is not built - exiting!
+  exit 1  
+fi
 echo SST is built --- now prior-based act with  $SEGMENTATION_PRIOR
-
 # need to modify params below
 # 2. run the SST through ACT to a group template
 SST_DIR=./SST_ACT
