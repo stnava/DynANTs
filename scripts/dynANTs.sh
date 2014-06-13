@@ -598,6 +598,18 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
     SUBPRE=${SUBPRE}testMode_
   fi
+  txs=" ${SSTACT}BrainSegmentationPrior0GenericAffine.mat 
+        ${SSTACT}BrainSegmentationPrior1Warp.nii.gz 
+        ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
+        ${SUBPRE}BrainSegmentationPrior0GenericAffine.mat 
+        ${SUBPRE}BrainSegmentationPrior1Warp.nii.gz 
+        ${SUBPRE}BrainSegmentationPrior1InverseWarp.nii.gz "
+  for tx in $txs  ; do 
+    if [[ ! -s $tx ]] ; then 
+      echo $tx does not exist - exiting 
+      exit 1
+    fi
+  done
   totem=" -t [${SSTACT}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
           -t  ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
           -t [${SUBPRE}BrainSegmentationPrior0GenericAffine.mat,1] 
