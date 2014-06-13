@@ -530,6 +530,9 @@ if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then
     -p $SEGMENTATION_PRIOR \
     -o ${SSTACT}
 fi
+if [[ $DEBUG_MODE -eq 1 ]] ; then 
+  SSTACT=${SSTACT}testMode
+fi
 if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
   echo SST ACT failed to produce ${SSTACT}CorticalThickness.nii.gz 
   exit 1
@@ -573,6 +576,9 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
       -p ${SSTACT}BrainSegmentationPosteriors%d.nii.gz \
       -n 1 \
       -o ${SUBPRE}
+  if [[ $DEBUG_MODE -eq 1 ]] ; then 
+    SUBPRE=${SUBPRE}testMode
+  fi
   if [[ ! -s ${SUBPRE}CorticalThickness.nii.gz ]] ; then 
     echo Failed to produce ${SUBPRE}CorticalThickness.nii.gz 
     exit 1
@@ -589,6 +595,9 @@ echo now compose maps ...
 ct=0
 for img in ${ANATOMICAL_IMAGES[@]} ; do
   SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
+  if [[ $DEBUG_MODE -eq 1 ]] ; then 
+    SUBPRE=${SUBPRE}testMode
+  fi
   totem=" -t [${SSTACT}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
           -t  ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
           -t [${SUBPRE}BrainSegmentationPrior0GenericAffine.mat,1] 
