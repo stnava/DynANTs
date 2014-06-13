@@ -564,7 +564,6 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
     img=$rigimg
     echo using $img rigidly prealigned 
   fi
-# rely on antsCorticalThickness to check its results
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
       -a $img \
       -w 0.5  \
@@ -572,7 +571,14 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
       -m ${SSTACT}BrainExtractionMask.nii.gz  \
       -f ${SSTACT}BrainExtractionMask2.nii.gz  \
       -p ${SSTACT}BrainSegmentationPosteriors%d.nii.gz \
+      -n 1 \
       -o ${SUBPRE}
+  if [[ ! -s ${SUBPRE}CorticalThickness.nii.gz ]] ; then 
+    echo Failed to produce ${SUBPRE}CorticalThickness.nii.gz 
+    exit 1
+  else 
+    echo Successful ${SUBPRE}CorticalThickness.nii.gz 
+  fi
   let ct=$ct+1
 done 
 
@@ -599,7 +605,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   fi
   thk=${SUBPRE}CorticalThickness.nii.gz
   antsApplyTransforms -d $dim -i $thk -r $BRAIN_TEMPLATE $totem -o ${SUBPRE}ThicknessToGroupTemplate.nii.gz # fwd
-  if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then 
+  if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then
     antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o ${SUBPRE}_Label.nii.gz -n MultiLabel
     ImageMath 3 ${SUBPRE}_LabelThickness.csv LabelStats ${SUBPRE}_Label.nii.gz $thk
   fi
