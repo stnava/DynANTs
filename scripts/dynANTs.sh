@@ -531,13 +531,13 @@ if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then
     -o ${SSTACT}
 fi
 if [[ $DEBUG_MODE -eq 1 ]] ; then 
-  SSTACT=${SSTACT}testMode
+  SSTACT=${SSTACT}testMode_
 fi
 if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
   echo SST ACT failed to produce ${SSTACT}CorticalThickness.nii.gz 
   exit 1
 else 
-  echo SST ACT is done and completed successfully
+  echo Successfully produced  ${SSTACT}CorticalThickness.nii.gz 
 fi
 # 3. run the time point images through ACT with the SST as template
 # 3b. rigidly pre-align to SST
@@ -577,7 +577,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
       -n 1 \
       -o ${SUBPRE}
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
-    SUBPRE=${SUBPRE}testMode
+    SUBPRE=${SUBPRE}testMode_
   fi
   if [[ ! -s ${SUBPRE}CorticalThickness.nii.gz ]] ; then 
     echo Failed to produce ${SUBPRE}CorticalThickness.nii.gz 
@@ -596,7 +596,7 @@ ct=0
 for img in ${ANATOMICAL_IMAGES[@]} ; do
   SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
-    SUBPRE=${SUBPRE}testMode
+    SUBPRE=${SUBPRE}testMode_
   fi
   totem=" -t [${SSTACT}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
           -t  ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
