@@ -573,7 +573,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
       -e ${SST}template0N3.nii.gz \
       -m ${SSTACT}BrainExtractionMask.nii.gz  \
       -f ${SSTACT}BrainExtractionMask2.nii.gz  \
-      -p ${SSTACT}BrainSegmentationPosteriors%02d.nii.gz \
+      -p ${SSTACT}BrainSegmentationPosteriors%0d.nii.gz \
       -n 1 \
       -o ${SUBPRE}
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
