@@ -10,6 +10,6 @@ bash ./scripts/dynANTs.sh  -d $dim -k 1 -z 1 \
   -e ${dir}template/T_template0.nii.gz \
   -m ${dir}template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
   -f ${dir}template/T_template0_BrainCerebellumExractionMask.nii.gz \
-  -p ${dir}template/Priors/priors%d.nii.gz \
+  -p ${dir}template/Priors/priors%02d.nii.gz \
   -o ${PWD}/dynantsdebug,118678,20140127,20140415 \
   -a $i -a $j 
