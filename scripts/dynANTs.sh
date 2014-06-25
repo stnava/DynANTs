@@ -628,7 +628,9 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsApplyTransforms -d $dim -i $thk -r $BRAIN_TEMPLATE $totem -o ${SUBPRE}ThicknessToGroupTemplate.nii.gz # fwd
   if [[ ${#CORTICAL_LABEL_IMAGE} -gt 4 ]] ; then
     antsApplyTransforms -d $dim -i $CORTICAL_LABEL_IMAGE -r $img            $toind -o ${SUBPRE}_Label.nii.gz -n MultiLabel
-    ImageMath 3 ${SUBPRE}_LabelThickness.csv LabelStats ${SUBPRE}_Label.nii.gz $thk
+    ThresholdImage 3 ${SUBPRE}BrainSegmentation.nii.gz ${SUBPRE}_LabelCort.nii.gz 2 2 
+    MultiplyImages 3 ${SUBPRE}_Label.nii.gz ${SUBPRE}_LabelCort.nii.gz ${SUBPRE}_LabelCort.nii.gz
+    ImageMath 3 ${SUBPRE}_LabelThickness.csv LabelStats ${SUBPRE}_LabelCort.nii.gz $thk
   fi
   let ct=$ct+1
 done
