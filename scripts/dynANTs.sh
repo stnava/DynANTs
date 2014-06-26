@@ -617,14 +617,14 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
     SUBPRE=${SUBPRE}testMode_
   fi
-  txs="   -t  ${SSTACT}TemplateToSubject1GenericAffine.mat  
-          -t  ${SSTACT}TemplateToSubject0Warp.nii.gz 
-          -t  ${SUBPRE}TemplateToSubject1GenericAffine.mat  
-          -t  ${SUBPRE}TemplateToSubject0Warp.nii.gz
-          -t  ${SSTACT}SubjectToTemplate0GenericAffine.mat  
-          -t  ${SSTACT}SubjectToTemplate1Warp.nii.gz 
-          -t  ${SUBPRE}SubjectToTemplate0GenericAffine.mat  
-          -t  ${SUBPRE}SubjectToTemplate1Warp.nii.gz"
+  txs=" ${SSTACT}TemplateToSubject1GenericAffine.mat  
+        ${SSTACT}TemplateToSubject0Warp.nii.gz 
+        ${SUBPRE}TemplateToSubject1GenericAffine.mat  
+        ${SUBPRE}TemplateToSubject0Warp.nii.gz
+        ${SSTACT}SubjectToTemplate0GenericAffine.mat  
+        ${SSTACT}SubjectToTemplate1Warp.nii.gz 
+        ${SUBPRE}SubjectToTemplate0GenericAffine.mat  
+        ${SUBPRE}SubjectToTemplate1Warp.nii.gz"
   for tx in $txs  ; do 
     if [[ ! -s $tx ]] ; then 
       echo $tx does not exist - exiting 
