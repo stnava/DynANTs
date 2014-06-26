@@ -12,6 +12,6 @@ bash ./scripts/dynANTs.sh  -d $dim  \
   -m ${dir}template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
   -f ${dir}template/T_template0_BrainCerebellumExractionMask.nii.gz \
   -p ${dir}template/Priors/priors%02d.nii.gz \
-  -l ${dir}template/antsMalfLabeling.nii.gz \
+  -r ${dir}template/antsMalfLabeling.nii.gz \
   -o ./dynantstest,118678,20140127,20140415 \
   -a $i -a $j 

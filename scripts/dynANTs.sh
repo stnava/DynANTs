@@ -580,6 +580,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
     echo using $img rigidly prealigned 
   fi
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick   \
+      -r ${SSTACT}CorticalThickness.nii.gz \
       -a $img \
       -w 0.5  \
       -e ${SST}template0N3.nii.gz \
@@ -616,6 +617,11 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   SUBPRE=${OUTPUT_PREFIX_VEC[${ct}]}
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
     SUBPRE=${SUBPRE}testMode_
+  fi
+  rigimg=${SUBPRE}_rigidWarped.nii.gz
+  if [[ -s $rigimg ]] ; then 
+    img=$rigimg
+    echo using $img rigidly prealigned 
   fi
   txs=" ${SSTACT}TemplateToSubject1GenericAffine.mat  
         ${SSTACT}TemplateToSubject0Warp.nii.gz 
