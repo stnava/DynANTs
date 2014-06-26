@@ -515,16 +515,22 @@ if [[ ! -s ${SST}template0N3.nii.gz ]] ; then
   exit 1  
 fi
 echo ${SST} is built --- now prior-based act with  $SEGMENTATION_PRIOR
+if [[ ! -s $REGISTRATION_TEMPLATE ]] || [[ ${#REGISTRATION_TEMPLATE} -lt 3  ]] ; then
+  echo please define $REGISTRATION_TEMPLATE via the -t option
+  exit 1
+fi
 # need to modify params below
 # 2. run the SST through ACT to a group template
 SST_DIR=${basedir}/${baseID}/${baseID}_SST_ACT/
 mkdir -p ${SST_DIR}
 SSTACT=${SST_DIR}/${baseID}_SST_ACT
 ######################################################
+usequick=1
 if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
-  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
+  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick \
     -a ${SST}template0.nii.gz \
     -e $BRAIN_TEMPLATE \
+    -t $REGISTRATION_TEMPLATE \
     -f $EXTRACTION_REGISTRATION_MASK \
     -m $EXTRACTION_PRIOR  \
     -p $SEGMENTATION_PRIOR \
@@ -538,6 +544,12 @@ if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then
   exit 1
 else 
   echo Successfully produced  ${SSTACT}CorticalThickness.nii.gz 
+fi
+if [[ ! -s ${SSTACT}ExtractedBrain0N4.nii.gz ]] ; then 
+  echo SST ACT failed to produce ${SSTACT}ExtractedBrain0N4.nii.gz 
+  exit 1
+else 
+  echo Successfully produced  ${SSTACT}ExtractedBrain0N4.nii.gz 
 fi
 # 3. run the time point images through ACT with the SST as template
 # 3b. rigidly pre-align to SST
@@ -567,10 +579,11 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
     img=$rigimg
     echo using $img rigidly prealigned 
   fi
-  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  \
+  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick   \
       -a $img \
       -w 0.5  \
       -e ${SST}template0N3.nii.gz \
+      -t ${SSTACT}ExtractedBrain0N4.nii.gz \
       -m ${SSTACT}BrainExtractionMask.nii.gz  \
       -f ${SSTACT}BrainExtractionMask2.nii.gz  \
       -p ${SSTACT}BrainSegmentationPosteriors%02d.nii.gz \
@@ -585,6 +598,12 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   else 
     echo Successful ${SUBPRE}CorticalThickness.nii.gz 
   fi
+  if [[ ! -s ${SUBPRE}ExtractedBrain0N4.nii.gz ]] ; then 
+    echo Failed to produce ${SUBPRE}ExtractedBrain0N4.nii.gz 
+    exit 1
+  else 
+    echo Successful ${SUBPRE}ExtractedBrain0N4.nii.gz 
+  fi
   let ct=$ct+1
 done 
 
@@ -598,26 +617,28 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   if [[ $DEBUG_MODE -eq 1 ]] ; then 
     SUBPRE=${SUBPRE}testMode_
   fi
-  txs=" ${SSTACT}BrainSegmentationPrior0GenericAffine.mat 
-        ${SSTACT}BrainSegmentationPrior1Warp.nii.gz 
-        ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
-        ${SUBPRE}BrainSegmentationPrior0GenericAffine.mat 
-        ${SUBPRE}BrainSegmentationPrior1Warp.nii.gz 
-        ${SUBPRE}BrainSegmentationPrior1InverseWarp.nii.gz "
+  txs="   -t  ${SSTACT}TemplateToSubject1GenericAffine.mat  
+          -t  ${SSTACT}TemplateToSubject0Warp.nii.gz 
+          -t  ${SUBPRE}TemplateToSubject1GenericAffine.mat  
+          -t  ${SUBPRE}TemplateToSubject0Warp.nii.gz
+          -t  ${SSTACT}SubjectToTemplate0GenericAffine.mat  
+          -t  ${SSTACT}SubjectToTemplate1Warp.nii.gz 
+          -t  ${SUBPRE}SubjectToTemplate0GenericAffine.mat  
+          -t  ${SUBPRE}SubjectToTemplate1Warp.nii.gz"
   for tx in $txs  ; do 
     if [[ ! -s $tx ]] ; then 
       echo $tx does not exist - exiting 
       exit 1
     fi
   done
-  totem=" -t [${SSTACT}BrainSegmentationPrior0GenericAffine.mat ,1 ] 
-          -t  ${SSTACT}BrainSegmentationPrior1InverseWarp.nii.gz 
-          -t [${SUBPRE}BrainSegmentationPrior0GenericAffine.mat,1] 
-          -t ${SUBPRE}BrainSegmentationPrior1InverseWarp.nii.gz"
-  toind=" -t ${SSTACT}BrainSegmentationPrior1Warp.nii.gz 
-          -t ${SSTACT}BrainSegmentationPrior0GenericAffine.mat 
-          -t ${SUBPRE}BrainSegmentationPrior1Warp.nii.gz 
-          -t ${SUBPRE}BrainSegmentationPrior0GenericAffine.mat "
+  totem=" -t  ${SSTACT}SubjectToTemplate1Warp.nii.gz  
+          -t  ${SSTACT}SubjectToTemplate0GenericAffine.mat
+          -t  ${SUBPRE}SubjectToTemplate1Warp.nii.gz 
+          -t  ${SUBPRE}SubjectToTemplate0GenericAffine.mat  "
+  toind=" -t  ${SUBPRE}TemplateToSubject1GenericAffine.mat
+          -t  ${SUBPRE}TemplateToSubject0Warp.nii.gz
+          -t  ${SSTACT}TemplateToSubject1GenericAffine.mat
+          -t  ${SSTACT}TemplateToSubject0Warp.nii.gz "  
   if [[ ! -s ${SUBPRE}_to_templateWarp.nii.gz ]]  ; then
     antsApplyTransforms -d $dim -r $BRAIN_TEMPLATE $totem -o [${SUBPRE}_to_templateWarp.nii.gz, 1 ] # fwd
   fi

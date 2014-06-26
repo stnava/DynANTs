@@ -8,8 +8,10 @@ echo $imglist
 # will take a long time
 bash ./scripts/dynANTs.sh  -d $dim  \
   -e ${dir}template/T_template0.nii.gz \
+  -t ${dir}template/T_template0_Brain.nii.gz \
   -m ${dir}template/T_template0_BrainCerebellumProbabilityMask.nii.gz \
   -f ${dir}template/T_template0_BrainCerebellumExractionMask.nii.gz \
   -p ${dir}template/Priors/priors%02d.nii.gz \
+  -l ${dir}template/antsMalfLabeling.nii.gz \
   -o ./dynantstest,118678,20140127,20140415 \
   -a $i -a $j 
