@@ -516,7 +516,7 @@ if [[ ! -s ${SST}template0N3.nii.gz ]] ; then
 fi
 echo ${SST} is built --- now prior-based act with  $SEGMENTATION_PRIOR
 if [[ ! -s $REGISTRATION_TEMPLATE ]] || [[ ${#REGISTRATION_TEMPLATE} -lt 3  ]] ; then
-  echo please define $REGISTRATION_TEMPLATE via the -t option
+  echo please define REGISTRATION_TEMPLATE $REGISTRATION_TEMPLATE via the -t option
   exit 1
 fi
 # need to modify params below
