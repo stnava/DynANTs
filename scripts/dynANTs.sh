@@ -582,7 +582,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
   antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick   \
       -r ${SSTACT}CorticalThickness.nii.gz \
       -a $img \
-      -w 0.5  \
+      -w $ATROPOS_SEGMENTATION_PRIOR_WEIGHT  \
       -e ${SST}template0N3.nii.gz \
       -t ${SSTACT}ExtractedBrain0N4.nii.gz \
       -m ${SSTACT}BrainExtractionMask.nii.gz  \
