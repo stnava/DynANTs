@@ -117,6 +117,7 @@ Optional arguments:
                                                 for brain extraction.
      -k:  keep temporary files                  Keep brain extraction/segmentation warps, etc (default = 0).
      -i:  max iterations for registration       ANTS registration max iterations (default = 100x100x70x20)
+     -j:  use floating-point precision          Use floating point precision in registrations (default = 0)
      -w:  Atropos prior segmentation weight     Atropos spatial prior *probability* weight for the segmentation (default = 0.25)
      -n:  number of segmentation iterations     N4 -> Atropos -> N4 iterations during segmentation (default = 3)
      -b:  posterior formulation                 Atropos posterior formulation and whether or not to use mixture model proportions.
@@ -136,6 +137,9 @@ Optional arguments:
                                                 range of the distance prior.  To apply to all label values, simply omit
                                                 specifying the label, i.e. -l [lambda,boundaryProbability].
 
+     -q:  Use quick registration parameters     If = 1, use antsRegistrationSyNQuick.sh as the basis for registration
+                                                during brain extraction, brain segmentation, and (optional) normalization
+                                                to a template.  Otherwise use antsRegistrationSyN.sh (default = 0).
     
      -z:  Test / debug mode                     If > 0, runs a faster version of the script. Only for testing. Implies -u 0.
                                                 Requires single thread computation for complete reproducibility.
