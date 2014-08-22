@@ -538,9 +538,11 @@ if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then
   # Important!!! remove small non-legit probabilities from posteriors
   # dont propagate error via subsequent applications of posteriors to timepoints
   for x in ${SSTACT}BrainSegmentationPosteriors*.nii.gz ; do 
-    ThresholdImage $dim ${x} ${x}temp.nii.gz 0.01 Inf 
-    MultiplyImages $dim ${x}temp.nii.gz ${x} ${x} 
-    rm ${x}temp.nii.gz
+    if [[ -s $x ]] ; then 
+      ThresholdImage $dim ${x} ${x}temp.nii.gz 0.01 Inf 
+      MultiplyImages $dim ${x}temp.nii.gz ${x} ${x} 
+      rm ${x}temp.nii.gz
+    fi
   done
 fi
 if [[ $DEBUG_MODE -eq 1 ]] ; then 
