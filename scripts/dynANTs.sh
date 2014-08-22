@@ -333,6 +333,7 @@ DIRECT_SMOOTHING_SIGMA="1.5"
 DIRECT_NUMBER_OF_DIFF_COMPOSITIONS="10"
 
 USE_FLOAT_PRECISION=0
+RUN_QUICK=0
 
 if [[ $# -lt 3 ]] ; then
   Usage >&2
@@ -368,6 +369,9 @@ else
           i) #max_iterations
        ANTS_MAX_ITERATIONS=$OPTARG
        ;;
+          j) #use floating point precision
+       USE_FLOAT_PRECISION=$OPTARG
+       ;;
           k) #keep tmp images
        KEEP_TMP_IMAGES=$OPTARG
        ;;
@@ -386,8 +390,8 @@ else
           p) #brain segmentation label prior image
        SEGMENTATION_PRIOR=$OPTARG
        ;;
-          q) #use floating point precision
-       USE_FLOAT_PRECISION=$OPTARG
+          q) # run quick
+       RUN_QUICK=$OPTARG
        ;;
           r) #cortical label image
        CORTICAL_LABEL_IMAGE=$OPTARG
@@ -525,23 +529,34 @@ SST_DIR=${basedir}/${baseID}/${baseID}_SST_ACT/
 mkdir -p ${SST_DIR}
 SSTACT=${SST_DIR}/${baseID}_SST_ACT
 ######################################################
-usequick=1
 if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then 
-  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick \
+  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $RUN_QUICK \
     -a ${SST}template0.nii.gz \
     -e $BRAIN_TEMPLATE \
     -t $REGISTRATION_TEMPLATE \
     -f $EXTRACTION_REGISTRATION_MASK \
     -m $EXTRACTION_PRIOR  \
+    -j $USE_FLOAT_PRECISION \
     -p $SEGMENTATION_PRIOR \
     -o ${SSTACT}
   # Important!!! remove small non-legit probabilities from posteriors
   # dont propagate error via subsequent applications of posteriors to timepoints
-  for x in ${SSTACT}BrainSegmentationPosteriors*.nii.gz ; do 
+  posteriors=(`ls ${SSTACT}BrainSegmentationPosteriors[0-9][0-9].nii.gz`)
+  priors=(`ls ${SSTACT}BrainSegmentationPriorWarped[0-9][0-9].nii.gz`)
+  priorsnum=${#priors[@]}
+  posteriorsnum=${#posteriors[@]}
+  if [[ !priorsnum -ne $posteriorsnum ]] ; then 
+    echo $SSTACT number of priors not equal to number of posteriors - exit 
+    exit 1
+  fi
+  priorct=0
+  for x in `ls ${SSTACT}BrainSegmentationPriorWarped[0-9][0-9].nii.gz` ; do 
     if [[ -s $x ]] ; then 
-      ThresholdImage $dim ${x} ${x}temp.nii.gz 0.01 Inf 
-      MultiplyImages $dim ${x}temp.nii.gz ${x} ${x} 
-      rm ${x}temp.nii.gz
+      postimg=${posteriors[${priorct}]}
+      let priorct=$priorct+1
+      ThresholdImage $dim ${x} ${SSTACT}temp.nii.gz 0.01 Inf
+      MultiplyImages $dim ${SSTACT}temp.nii.gz ${postimg} ${postimg}
+      rm ${SSTACT}temp.nii.gz
     fi
   done
 fi
@@ -588,7 +603,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
     img=$rigimg
     echo using $img rigidly prealigned 
   fi
-  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $usequick   \
+  antsCorticalThickness.sh -d $dim -z $DEBUG_MODE -k $KEEP_TMP_IMAGES  -q $RUN_QUICK   \
       -r ${SSTACT}CorticalThickness.nii.gz \
       -a $img \
       -w $ATROPOS_SEGMENTATION_PRIOR_WEIGHT  \
@@ -596,6 +611,7 @@ for img in ${ANATOMICAL_IMAGES[@]} ; do
       -t ${SSTACT}ExtractedBrain0N4.nii.gz \
       -m ${SSTACT}BrainExtractionMask.nii.gz  \
       -f ${SSTACT}BrainExtractionMask2.nii.gz  \
+      -j $USE_FLOAT_PRECISION \
       -p ${SSTACT}BrainSegmentationPosteriors%02d.nii.gz \
       -n 1 \
       -o ${SUBPRE}
