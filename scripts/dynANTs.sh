@@ -549,7 +549,7 @@ if [[ ! -s ${SSTACT}CorticalThickness.nii.gz ]] ; then
   priors=(`ls ${SSTACT}BrainSegmentationPriorWarped[0-9][0-9].nii.gz`)
   priorsnum=${#priors[@]}
   posteriorsnum=${#posteriors[@]}
-  if [[ !priorsnum -ne $posteriorsnum ]] ; then 
+  if [[ $priorsnum -ne $posteriorsnum ]] ; then 
     echo $SSTACT number of priors not equal to number of posteriors - exit 
     exit 1
   fi
