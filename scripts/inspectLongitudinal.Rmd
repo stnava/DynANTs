@@ -131,38 +131,45 @@ warpfn<-Sys.glob(paste(basedir,locid,"/*SingleSubjectTemplate/T_templateSubjectT
       jimg<-antsImageRead( jfn, 3)
       wimg<-antsApplyTransforms( fixed=temimg,
         moving=jimg, transformlist=txlist)
+      SmoothImage(3,wimg,smoothingparam,wimg)
       antsImageWrite( wimg , wout )
-      } else print(paste(locid,wout,'done'))
+      } else {
+      print(paste(locid,wout,'done'))
+#      wimg<-antsImageRead( wout, 3 )
+      }
     bigct<-bigct+1
-    imagelist[[ct]]<-wimg
+#    imagelist[[ct]]<-wimg
     ct<-ct+1
   }
-  simagelist<-list()
-  ct<-1
-  for ( img in imagelist ) {
-    simg<-antsImageClone(img)
-    SmoothImage(img@dimension,img,smoothingparam,simg)
-    simagelist[[ct]]<-simg
-    ct<-ct+1
-  }
-  tmask<-antsImageRead(testmaskfn,3)
-  tmask[ tmask < 0.5 ]<-0
-  tmask[ tmask >= 0.5 ]<-1
-  dtime<-mydf$mydelt[ mydf$myids==locid ]
-  mat<-imageListToMatrix( simagelist, tmask )
-  # this produces high correlations for thinning
-  mycorrs<-as.numeric( cor(rev(dtime),mat) )
-  corrs<-antsImageClone(tmask)
-  corrs[tmask==1]<-mycorrs
-  ncorrs<-antsImageClone(tmask)
-  ncorrs[tmask==1]<-mycorrs*(-1)
+#  simagelist<-list()
+#  ct<-1
+#  for ( img in imagelist ) {
+#    simg<-antsImageClone(img)
+#    SmoothImage(img@dimension,img,smoothingparam,simg)
+#    simagelist[[ct]]<-simg
+#    ct<-ct+1
+#  }
   ofn<-paste(outprefix,locid,'_delta_time_corrs.nii.gz',sep='')
-  antsImageWrite(corrs,ofn)
-  ofn<-paste(outprefix,locid,'_delta_time_corrs.jpg',sep='')
-  if ( exists("brain") )
-    plotANTsImage( brain, functional=list(corrs,ncorrs),
-      threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
-      outname=ofn, alpha=0.25)
+  if (  ( ! file.exists(ofn) ) & FALSE  )
+    {
+    tmask<-antsImageRead(testmaskfn,3)
+    tmask[ tmask < 0.5 ]<-0
+    tmask[ tmask >= 0.5 ]<-1
+    dtime<-mydf$mydelt[ mydf$myids==locid ]
+    mat<-imageListToMatrix( simagelist, tmask )
+    # this produces high correlations for thinning
+    mycorrs<-as.numeric( cor(rev(dtime),mat) )
+    corrs<-antsImageClone(tmask)
+    corrs[tmask==1]<-mycorrs
+    ncorrs<-antsImageClone(tmask)
+    ncorrs[tmask==1]<-mycorrs*(-1)
+    antsImageWrite(corrs,ofn)
+    ofn<-paste(outprefix,locid,'_delta_time_corrs.jpg',sep='')
+    if ( exists("brain") )
+      plotANTsImage( brain, functional=list(corrs,ncorrs),
+        threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
+        outname=ofn, alpha=0.25)
+    }
 }
 ```
 
@@ -171,14 +178,46 @@ Run the voxel-wise stats.
 ```{r fig.width=8, fig.height=4, echo=TRUE}
 corrfns<-Sys.glob(paste(outprefix,"*corrs.nii.gz",sep=''))
 wimgfns<-Sys.glob(paste(outprefix,"*warped*.nii.gz",sep=''))
-imging<-imagesToMatrix(wimgfns, tmask )
-myform<-as.formula( paste("imging~1+(1|myids)" ) )
+tmask<-antsImageRead(testmaskfn,3)
+bmask<-antsImageClone( tmask )
+bmask[ bmask > 0 ]<-1
+lab<-147
+tmask[ tmask != lab ]<-0
+tmask[ tmask == lab ]<-1
+sum(tmask==1)
+imglist<-imageFileNames2ImageList( wimgfns, 3 )
+imging<-imageListToMatrix( imglist, tmask )
+# should be a random effect but it's too slow
+fid<-as.factor( filtdf$myids )
+quadmodel<-I(filtdf$mydelt)^2
+quadmodel<-stats::poly( filtdf$mydelt, 2 )
+age<-rnorm(nrow(filtdf))
+mdl<-lm( imging ~ 1 + quadmodel + age + fid )
+mdlinterp<-bigLMStats( mdl , 1.e-4 )
+print( min(p.adjust(mdlinterp$beta.pval[2,],method='BH')) )
+##### now do a lmer on the whole mat
+mdl<-lmer(rowMeans(imging)~1+quadmodel+(1|myids),data=filtdf)
+print(summary(mdl))
+####
+# derka
+# for ( i in 1:ncol(imging))
+#  {
+#  myform<-as.formula( paste("imging[,",as.character(i)
+#   ,"]~1+mydelt+(1|myids)" ) )
+#  mdl<-lmer(myform,data=filtdf)
+#  print(summary(mdl))
+#  myform<-as.formula( paste("imging[,",as.character(i)
+#   ,"]~1+quadmodel+(1|myids)" ) )
+#  mdl<-lmer(myform,data=filtdf)
+#  print(summary(mdl))
+#  }
 # get rid of random effects
-rimging<-residuals( lmer(myform,data=filtdf) )
+# myform<-as.formula( paste("imging~1+(1|myids)" ) )
+# rimging<-residuals( lmer(myform,data=filtdf),type = c("response" ))
+# derka
 # then do standard bigLMStats
-mylm<-lm( rimging ~  )
-#
-
+# mylm<-lm( rimging ~  )
+# bigLMStats
 if ( FALSE )
   {
   ttg<-rep(0,ncol(corrmat))
