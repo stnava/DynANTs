@@ -1,0 +1,201 @@
+---
+title: "ANTs longitudinal cortical thickness statistics"
+output: pdf_document
+---
+
+# Objective
+Compare results of your local ANTs processing to a set of reference results
+
+```{r fig.width=8, fig.height=4, echo=FALSE}
+library(ANTsR)
+library(ggplot2)
+library(date)
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(packHV)
+library(lattice)
+##############################
+##############################
+```
+
+Define study parameters
+```{r fig.width=8, fig.height=4, echo=TRUE}
+studytype<-'jacobian'
+mydf<-data.frame()
+basedir<-"/Users/stnava/Downloads/TBIL/LongitudinalOct27/data/jet/jtduda/data/TBI-Long/subjects/"
+basedir<-"/Users/stnava/Downloads/TBIL/antslongct/"
+# get this right ....
+csvs<-Sys.glob(paste(basedir,"*/*/*MPR*brainvols.csv",sep=''))
+maskfn<-"/Users/stnava/Downloads/TBIL/pennTemplate/masks/templateBrainMaskProbability.nii.gz"
+testmaskfn<-"/Users/stnava/Downloads/TBIL/pennTemplate/labels/antsMalfLabels.nii.gz"
+if ( ! file.exists(maskfn) ) print(paste(maskfn,'doesnt exist'))
+if ( ! file.exists(testmaskfn) ) print(paste(testmaskfn,'doesnt exist'))
+```
+
+Now do the preprocessing
+
+```{r fig.width=8, fig.height=4, echo=TRUE}
+temimg<-antsImageRead(maskfn,3)
+outprefix<-'/Users/stnava/Downloads/TBIL/temp/FTD_Stats_'
+smoothingparam<-2.0 # smoothing before stats
+for ( mycsv in csvs ) {
+  subjectName<-unlist(strsplit(as.character(mycsv),".csv"))
+  subjectName<-unlist(strsplit(as.character(subjectName),"/"))
+  subjectName<-subjectName[length(subjectName)]
+  print(subjectName)
+  temp<-read.csv(mycsv)
+  temp<-cbind(temp,subject=rep(subjectName,nrow(temp)))
+  if ( max(dim(mydf)) == 0 ) mydf<-temp else mydf<-rbind(mydf,temp)
+}
+# now create dates + uniqids
+mydates<-list()
+mydates2<-c()
+myids<-rep("",nrow(mydf))
+for ( i in 1:nrow(mydf) ) {
+    ss<-strsplit(as.character(mydf$subject[i]),"_")
+    locyear<-substr(ss[[1]][2],1,4)
+    locmon<-substr(ss[[1]][2],5,6)
+    locday<-substr(ss[[1]][2],7,8)
+   ddd<-paste(locmon,locday,locyear,sep='/')
+    mydates[[i]]<-as.date(ddd)
+    mydates2[i]<-as.date(ddd)
+    myids[i]<-as.character(ss[[1]][1])
+}
+mydf<-data.frame(myids,mydates2 ,mydelt=rep(0,nrow(mydf)),mydf)
+
+ct<-2
+while ( ct <= nrow(mydf) )
+  {
+  if ( mydf$myids[ct] ==   mydf$myids[ct-1] ) {
+    basect<-which( mydf$myids == mydf$myids[ct] )
+    mydf$mydelt[ct]<-as.date(mydf$mydates[ct])-as.date(mydf$mydates[basect[1]])
+  }
+  ct<-ct+1
+  }
+
+
+if ( TRUE ) {
+countnas<-rep(0,ncol(mydf))
+for ( i in 1:ncol(mydf) ) countnas[i]<-sum( is.na( mydf[,i] ) )
+whcols<-which( countnas <= 8 )
+mydf<-mydf[,whcols]
+filtdf<-data.frame(na.omit(mydf))
+p<-ggplot(data=mydf, aes( x = mydelt, y = PearsonCorrelation, group = myids )) +   geom_line()  + geom_point()
+plot(p)
+####
+for ( jj in 4:8 )
+  {
+  imging<-filtdf[,jj]
+  myform<-as.formula( paste("imging~mydelt+(1|myids)" ) )
+  mxf<-lmer(myform,data=filtdf)
+  smxf<-summary(mxf)
+  print(smxf)
+  locallabel<-colnames(filtdf)[jj]
+  print(paste(locallabel))
+  p<-ggplot(data=mydf, aes( x = mydelt, y = imging, group = myids )) +   geom_line()  + geom_point() + ggtitle(locallabel)
+#  plot(p)
+}
+
+}
+
+#
+bigct<-10
+for ( locid in levels(mydf$myids) )
+  {
+  if ( studytype =='thickness')
+    { # FIXME - should be more robust
+    ipttrn<-glob2rx(paste("*",locid,"*Thickness.nii.gz",sep=''))
+    warpfn<-Sys.glob(paste(basedir,"*/*/*",locid,
+      "*SubjectToGroupTemplateWarp.nii.gz",sep=''))
+    }
+  if ( studytype =='jacobian')
+    { # FIXME - should be more robust
+    ipttrn<-glob2rx(paste("*",locid,"*ToTemplateLogJacobian.nii.gz",sep=''))
+afffn<-Sys.glob(paste(basedir,locid,"/*SingleSubjectTemplate/T_templateSubjectToTemplate0GenericAffine.mat",sep='')) # FIXME - should be like imagelistfn
+warpfn<-Sys.glob(paste(basedir,locid,"/*SingleSubjectTemplate/T_templateSubjectToTemplate1Warp.nii.gz",sep=''))# FIXME - should be like imagelistfn
+    }
+    imagelistfn<- paste(basedir,list.files(path=basedir,
+      pattern = ipttrn ,recursive=T),sep='/')
+    # check outputs
+  if ( !file.exists(imagelistfn[1]) ) stop("imagelistfn[1] does not exist")
+  if ( !file.exists(warpfn[1]) ) stop("warpfn[1] does not exist")
+  ct<-1
+  imagelist<-list()
+  for ( jfn in imagelistfn ) {
+    if ( studytype == 'jacobian' ) txlist<-c( warpfn, afffn )
+    if ( studytype != 'jacobian' ) txlist<-c( warpfn[ct] )
+    wout<-paste(outprefix,'warped',bigct,'.nii.gz',sep='' )
+    if ( ! file.exists(wout) )
+      {
+      jimg<-antsImageRead( jfn, 3)
+      wimg<-antsApplyTransforms( fixed=temimg,
+        moving=jimg, transformlist=txlist)
+      antsImageWrite( wimg , wout )
+      } else print(paste(locid,wout,'done'))
+    bigct<-bigct+1
+    imagelist[[ct]]<-wimg
+    ct<-ct+1
+  }
+  simagelist<-list()
+  ct<-1
+  for ( img in imagelist ) {
+    simg<-antsImageClone(img)
+    SmoothImage(img@dimension,img,smoothingparam,simg)
+    simagelist[[ct]]<-simg
+    ct<-ct+1
+  }
+  tmask<-antsImageRead(testmaskfn,3)
+  tmask[ tmask < 0.5 ]<-0
+  tmask[ tmask >= 0.5 ]<-1
+  dtime<-mydf$mydelt[ mydf$myids==locid ]
+  mat<-imageListToMatrix( simagelist, tmask )
+  # this produces high correlations for thinning
+  mycorrs<-as.numeric( cor(rev(dtime),mat) )
+  corrs<-antsImageClone(tmask)
+  corrs[tmask==1]<-mycorrs
+  ncorrs<-antsImageClone(tmask)
+  ncorrs[tmask==1]<-mycorrs*(-1)
+  ofn<-paste(outprefix,locid,'_delta_time_corrs.nii.gz',sep='')
+  antsImageWrite(corrs,ofn)
+  ofn<-paste(outprefix,locid,'_delta_time_corrs.jpg',sep='')
+  if ( exists("brain") )
+    plotANTsImage( brain, functional=list(corrs,ncorrs),
+      threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
+      outname=ofn, alpha=0.25)
+}
+```
+
+Run the voxel-wise stats.
+
+```{r fig.width=8, fig.height=4, echo=TRUE}
+corrfns<-Sys.glob(paste(outprefix,"*corrs.nii.gz",sep=''))
+wimgfns<-Sys.glob(paste(outprefix,"*warped*.nii.gz",sep=''))
+imging<-imagesToMatrix(wimgfns, tmask )
+myform<-as.formula( paste("imging~1+(1|myids)" ) )
+# get rid of random effects
+rimging<-residuals( lmer(myform,data=filtdf) )
+# then do standard bigLMStats
+mylm<-lm( rimging ~  )
+#
+
+if ( FALSE )
+  {
+  ttg<-rep(0,ncol(corrmat))
+  ttl<-rep(0,ncol(corrmat))
+  for ( i in 1:ncol(corrmat))
+    {
+    ttg[i]<-t.test(corrmat[,i],alternative = "g")$p.value
+    ttl[i]<-t.test(corrmat[,i],alternative = "l")$p.value
+    }
+  timg<-antsImageClone(tmask)
+  timg[tmask==1]<-1.0 - p.adjust( ttg, method='BH' )
+  antsImageWrite(timg,'corrtstatG.nii.gz')
+  timg<-antsImageClone(tmask)
+  timg[tmask==1]<-1.0 - p.adjust( ttl, method='BH' )
+  antsImageWrite(timg,'corrtstatL.nii.gz')
+  }
+```
+
+
+Set up visualization.
