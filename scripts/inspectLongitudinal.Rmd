@@ -21,9 +21,9 @@ library(lattice)
 
 Define study parameters
 ```{r fig.width=8, fig.height=4, echo=TRUE}
-studytype<-'jacobian'
+studytype<-c('jacobian','thickness')[2]
+outprefix<-paste('/Users/stnava/Downloads/TBIL/temp/FTD_Stats_',studytype,sep='')
 mydf<-data.frame()
-basedir<-"/Users/stnava/Downloads/TBIL/LongitudinalOct27/data/jet/jtduda/data/TBI-Long/subjects/"
 basedir<-"/Users/stnava/Downloads/TBIL/antslongct/"
 # get this right ....
 csvs<-Sys.glob(paste(basedir,"*/*/*MPR*brainvols.csv",sep=''))
@@ -37,7 +37,6 @@ Now do the preprocessing
 
 ```{r fig.width=8, fig.height=4, echo=TRUE}
 temimg<-antsImageRead(maskfn,3)
-outprefix<-'/Users/stnava/Downloads/TBIL/temp/FTD_Stats_'
 smoothingparam<-2.0 # smoothing before stats
 for ( mycsv in csvs ) {
   subjectName<-unlist(strsplit(as.character(mycsv),".csv"))
@@ -178,10 +177,10 @@ Run the voxel-wise stats.
 ```{r fig.width=8, fig.height=4, echo=TRUE}
 corrfns<-Sys.glob(paste(outprefix,"*corrs.nii.gz",sep=''))
 wimgfns<-Sys.glob(paste(outprefix,"*warped*.nii.gz",sep=''))
+lab<-48
 tmask<-antsImageRead(testmaskfn,3)
 bmask<-antsImageClone( tmask )
 bmask[ bmask > 0 ]<-1
-lab<-147
 tmask[ tmask != lab ]<-0
 tmask[ tmask == lab ]<-1
 sum(tmask==1)
@@ -194,23 +193,20 @@ quadmodel<-stats::poly( filtdf$mydelt, 2 )
 age<-rnorm(nrow(filtdf))
 mdl<-lm( imging ~ 1 + quadmodel + age + fid )
 mdlinterp<-bigLMStats( mdl , 1.e-4 )
-print( min(p.adjust(mdlinterp$beta.pval[2,],method='BH')) )
+print( min(p.adjust(mdlinterp$beta.pval[1,],method='BH')) )
 ##### now do a lmer on the whole mat
 mdl<-lmer(rowMeans(imging)~1+quadmodel+(1|myids),data=filtdf)
 print(summary(mdl))
-####
-# derka
-# for ( i in 1:ncol(imging))
-#  {
-#  myform<-as.formula( paste("imging[,",as.character(i)
-#   ,"]~1+mydelt+(1|myids)" ) )
-#  mdl<-lmer(myform,data=filtdf)
-#  print(summary(mdl))
-#  myform<-as.formula( paste("imging[,",as.character(i)
-#   ,"]~1+quadmodel+(1|myids)" ) )
-#  mdl<-lmer(myform,data=filtdf)
-#  print(summary(mdl))
-#  }
+if ( FALSE ) # do voxelwise study
+  {
+  for ( i in 1:ncol(imging))
+    {
+    myform<-as.formula( paste("imging[,",as.character(i)
+     ,"]~1+quadmodel+(1|myids)" ) )
+    mdl<-lmer(myform,data=filtdf)
+    print(summary(mdl))
+    }
+  }
 # get rid of random effects
 # myform<-as.formula( paste("imging~1+(1|myids)" ) )
 # rimging<-residuals( lmer(myform,data=filtdf),type = c("response" ))
