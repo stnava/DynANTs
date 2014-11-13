@@ -15,187 +15,232 @@ library(nlme)
 library(lmerTest)
 library(packHV)
 library(lattice)
+verbose<-FALSE
 ##############################
 ##############################
 ```
 
-Define study parameters
-```{r fig.width=8, fig.height=4, echo=TRUE}
+Define study demographic parameters.  
+We use the demographics file to construct
+the expected image file prefix.
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE,error=FALSE}
+### Most important thing - load a csv
+### location of subject directories
+basedir<-"/Users/stnava/Downloads/LongitudinalX/antslongct/"
+demog<-read.csv(paste(basedir,'../FTD_Long_Nov_2014.csv',sep='/'))
+expectedImagePrefix<-rep("NA",nrow(demog))
+haveSubjectTimePoint<-rep(FALSE,nrow(demog))
+for ( i in 1:nrow(demog) )
+  {
+  myid<-demog$INDDID[i]
+  rawdate<-as.character(demog$MRIDate[i])
+  rawdatesplit<-unlist(strsplit(rawdate,'/'))
+  locyear<-rawdatesplit[3]
+  locmon<-rawdatesplit[1]
+  locday<-rawdatesplit[2]
+  expectedImagePrefix[i]<-paste(myid,'_',locyear,locmon,locday,sep='')
+  findfn<-Sys.glob(paste(basedir,'/',myid,
+    '/',expectedImagePrefix[i],"*",sep=''))
+  if ( length(findfn) > 0) haveSubjectTimePoint[i]<-TRUE
+  }
+if ( verbose ) print(sum(haveSubjectTimePoint))
+demog<-cbind(demog,expectedImagePrefix=expectedImagePrefix,
+  haveSubjectTimePoint=haveSubjectTimePoint)
+```
+
+Define study imaging parameters
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
 studytype<-c('jacobian','thickness')[2]
-outprefix<-paste('/Users/stnava/Downloads/TBIL/temp/FTD_Stats_',studytype,sep='')
-mydf<-data.frame()
-basedir<-"/Users/stnava/Downloads/TBIL/antslongct/"
-# get this right ....
-csvs<-Sys.glob(paste(basedir,"*/*/*MPR*brainvols.csv",sep=''))
-maskfn<-"/Users/stnava/Downloads/TBIL/pennTemplate/masks/templateBrainMaskProbability.nii.gz"
-testmaskfn<-"/Users/stnava/Downloads/TBIL/pennTemplate/labels/antsMalfLabels.nii.gz"
-if ( ! file.exists(maskfn) ) print(paste(maskfn,'doesnt exist'))
-if ( ! file.exists(testmaskfn) ) print(paste(testmaskfn,'doesnt exist'))
+outprefix<-paste('/Users/stnava/Downloads/LongitudinalX/temp/FTD_Stats_',studytype,sep='')
+# get all of these paths / filenames right ....
+maskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/masks/templateBrainMaskProbability.nii.gz"
+testmaskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/labels/antsMalfLabels.nii.gz"
+if ( ! file.exists(maskfn) ) if ( verbose ) print(paste(maskfn,'doesnt exist'))
+if ( ! file.exists(testmaskfn) ) if ( verbose ) print(paste(testmaskfn,'doesnt exist'))
+temimg<-antsImageRead(maskfn,3)
+smoothingparam<-2.0 # smoothing before stats
 ```
 
 Now do the preprocessing
 
-```{r fig.width=8, fig.height=4, echo=TRUE}
-temimg<-antsImageRead(maskfn,3)
-smoothingparam<-2.0 # smoothing before stats
-for ( mycsv in csvs ) {
-  subjectName<-unlist(strsplit(as.character(mycsv),".csv"))
-  subjectName<-unlist(strsplit(as.character(subjectName),"/"))
-  subjectName<-subjectName[length(subjectName)]
-  print(subjectName)
-  temp<-read.csv(mycsv)
-  temp<-cbind(temp,subject=rep(subjectName,nrow(temp)))
-  if ( max(dim(mydf)) == 0 ) mydf<-temp else mydf<-rbind(mydf,temp)
-}
-# now create dates + uniqids
-mydates<-list()
-mydates2<-c()
-myids<-rep("",nrow(mydf))
-for ( i in 1:nrow(mydf) ) {
-    ss<-strsplit(as.character(mydf$subject[i]),"_")
-    locyear<-substr(ss[[1]][2],1,4)
-    locmon<-substr(ss[[1]][2],5,6)
-    locday<-substr(ss[[1]][2],7,8)
-   ddd<-paste(locmon,locday,locyear,sep='/')
-    mydates[[i]]<-as.date(ddd)
-    mydates2[i]<-as.date(ddd)
-    myids[i]<-as.character(ss[[1]][1])
-}
-mydf<-data.frame(myids,mydates2 ,mydelt=rep(0,nrow(mydf)),mydf)
-
-ct<-2
-while ( ct <= nrow(mydf) )
+Get the csv summary files.
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+csvs<-c()
+csvs<-rep(NA,nrow(demog))
+ncolslist<-rep(NA,nrow(demog))
+ct<-1
+for ( x in demog$expectedImagePrefix  )
   {
-  if ( mydf$myids[ct] ==   mydf$myids[ct-1] ) {
-    basect<-which( mydf$myids == mydf$myids[ct] )
-    mydf$mydelt[ct]<-as.date(mydf$mydates[ct])-as.date(mydf$mydates[basect[1]])
-  }
+  temp<-Sys.glob(paste(basedir,"*/*/",x,"*MPR*brainvols.csv",sep=''))
+  if ( length(temp) > 0 )
+    {
+    csvs[ct]<-temp
+    tempcsv<-read.csv(temp)
+    ncolslist[ct]<-ncol(tempcsv)
+    }
+  if ( length(temp) > 1 ) stop(paste("multi-match error",x))
   ct<-ct+1
   }
-
-
-if ( TRUE ) {
-countnas<-rep(0,ncol(mydf))
-for ( i in 1:ncol(mydf) ) countnas[i]<-sum( is.na( mydf[,i] ) )
-whcols<-which( countnas <= 8 )
-mydf<-mydf[,whcols]
-filtdf<-data.frame(na.omit(mydf))
-p<-ggplot(data=mydf, aes( x = mydelt, y = PearsonCorrelation, group = myids )) +   geom_line()  + geom_point()
-plot(p)
-####
-for ( jj in 4:8 )
+if ( sd( ncolslist[ !is.na(ncolslist) ] ) > 0 )
+  stop("different n columns in some files")
+csvdf<-matrix( rep(NA, ncolslist[ !is.na(ncolslist) ][1]*nrow(demog) ),
+  nrow=nrow(demog) )
+colnames(csvdf)<-colnames(tempcsv)
+myimagingdf <-data.frame( demog,csvdf  )
+ct<-1
+for ( x in demog$expectedImagePrefix  )
   {
-  imging<-filtdf[,jj]
-  myform<-as.formula( paste("imging~mydelt+(1|myids)" ) )
-  mxf<-lmer(myform,data=filtdf)
-  smxf<-summary(mxf)
-  print(smxf)
-  locallabel<-colnames(filtdf)[jj]
-  print(paste(locallabel))
-  p<-ggplot(data=mydf, aes( x = mydelt, y = imging, group = myids )) +   geom_line()  + geom_point() + ggtitle(locallabel)
-#  plot(p)
-}
-
-}
-
-#
-bigct<-10
-for ( locid in levels(mydf$myids) )
-  {
-  if ( studytype =='thickness')
-    { # FIXME - should be more robust
-    ipttrn<-glob2rx(paste("*",locid,"*Thickness.nii.gz",sep=''))
-    warpfn<-Sys.glob(paste(basedir,"*/*/*",locid,
-      "*SubjectToGroupTemplateWarp.nii.gz",sep=''))
-    }
-  if ( studytype =='jacobian')
-    { # FIXME - should be more robust
-    ipttrn<-glob2rx(paste("*",locid,"*ToTemplateLogJacobian.nii.gz",sep=''))
-afffn<-Sys.glob(paste(basedir,locid,"/*SingleSubjectTemplate/T_templateSubjectToTemplate0GenericAffine.mat",sep='')) # FIXME - should be like imagelistfn
-warpfn<-Sys.glob(paste(basedir,locid,"/*SingleSubjectTemplate/T_templateSubjectToTemplate1Warp.nii.gz",sep=''))# FIXME - should be like imagelistfn
-    }
-    imagelistfn<- paste(basedir,list.files(path=basedir,
-      pattern = ipttrn ,recursive=T),sep='/')
-    # check outputs
-  if ( !file.exists(imagelistfn[1]) ) stop("imagelistfn[1] does not exist")
-  if ( !file.exists(warpfn[1]) ) stop("warpfn[1] does not exist")
-  ct<-1
-  imagelist<-list()
-  for ( jfn in imagelistfn ) {
-    if ( studytype == 'jacobian' ) txlist<-c( warpfn, afffn )
-    if ( studytype != 'jacobian' ) txlist<-c( warpfn[ct] )
-    wout<-paste(outprefix,'warped',bigct,'.nii.gz',sep='' )
-    if ( ! file.exists(wout) )
-      {
-      jimg<-antsImageRead( jfn, 3)
-      wimg<-antsApplyTransforms( fixed=temimg,
-        moving=jimg, transformlist=txlist)
-      SmoothImage(3,wimg,smoothingparam,wimg)
-      antsImageWrite( wimg , wout )
-      } else {
-      print(paste(locid,wout,'done'))
-#      wimg<-antsImageRead( wout, 3 )
-      }
-    bigct<-bigct+1
-#    imagelist[[ct]]<-wimg
-    ct<-ct+1
-  }
-#  simagelist<-list()
-#  ct<-1
-#  for ( img in imagelist ) {
-#    simg<-antsImageClone(img)
-#    SmoothImage(img@dimension,img,smoothingparam,simg)
-#    simagelist[[ct]]<-simg
-#    ct<-ct+1
-#  }
-  ofn<-paste(outprefix,locid,'_delta_time_corrs.nii.gz',sep='')
-  if (  ( ! file.exists(ofn) ) & FALSE  )
+  temp<-Sys.glob(paste(basedir,"*/*/",x,"*MPR*brainvols.csv",sep=''))
+  if ( length(temp) > 0 )
     {
-    tmask<-antsImageRead(testmaskfn,3)
-    tmask[ tmask < 0.5 ]<-0
-    tmask[ tmask >= 0.5 ]<-1
-    dtime<-mydf$mydelt[ mydf$myids==locid ]
-    mat<-imageListToMatrix( simagelist, tmask )
-    # this produces high correlations for thinning
-    mycorrs<-as.numeric( cor(rev(dtime),mat) )
-    corrs<-antsImageClone(tmask)
-    corrs[tmask==1]<-mycorrs
-    ncorrs<-antsImageClone(tmask)
-    ncorrs[tmask==1]<-mycorrs*(-1)
-    antsImageWrite(corrs,ofn)
-    ofn<-paste(outprefix,locid,'_delta_time_corrs.jpg',sep='')
-    if ( exists("brain") )
-      plotANTsImage( brain, functional=list(corrs,ncorrs),
-        threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
-        outname=ofn, alpha=0.25)
+    csvs[ct]<-temp
+    tempcsv<-read.csv(temp)
+    myimagingdf[ct,2:ncol(myimagingdf)]<-tempcsv
+    ncolslist[ct]<-ncol(tempcsv)
     }
+  ct<-ct+1
+  }
+```
+
+```{r derka, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+mydelt<-rep(NA,nrow(demog))
+ct<-2 # start here b/c we check one back
+while ( ct <= nrow(myimagingdf ) )
+  {
+  if ( demog$INDDID[ct] == demog$INDDID[ct-1] &
+       ! is.na(demog$INDDID[ct]) )
+    {
+    basect<-which( demog$INDDID == demog$INDDID[ct] )[1]
+    allct<-which( demog$INDDID == demog$INDDID[ct] )
+    demog$AgeatMRI[ allct ]<-demog$AgeatMRI[basect]
+    mydelt[basect]<-0
+    dt1<-as.character( demog$MRIDate[ct] )
+    dt2<-as.character( demog$MRIDate[basect] )
+    mydelt[ct]<-as.date(dt1,order='mdy')-
+                as.date(dt2,order='mdy')
+    }
+  ct<-ct+1
+  }
+```
+
+```{r derka2, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+myimagingdf<-cbind(myimagingdf,INDDID=demog$INDDID,timeSinceBaseline=mydelt)
+```
+
+
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+p<-ggplot(data=myimagingdf , aes( x = timeSinceBaseline, y = BVOL,
+  group = INDDID )) +   geom_line()  + geom_point()
+plot(p)
+```
+
+```{r firstplot, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+for ( jj in 16:19 )
+  {
+  imging<-myimagingdf[,jj]
+  myform<-as.formula( paste("imging~timeSinceBaseline+(1|INDDID)" ) )
+  mxf<-lmer(myform,data=myimagingdf)
+  smxf<-summary(mxf)
+  if ( verbose ) print(smxf)
+  locallabel<-colnames(myimagingdf)[jj]
+  if ( verbose ) print(paste(locallabel))
+  p<-ggplot(data=myimagingdf , aes( x = timeSinceBaseline,
+    y = imging, group = INDDID )) +
+    geom_line()  + geom_point() + ggtitle(locallabel)
+  plot(p)
 }
+````
+
+
+```{r derka4, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+bigct<-1
+countup<-0
+haveimg<-rep(0,nrow(demog))
+for ( loopid in demog$expectedImagePrefix )
+  {
+  locid<-as.character( loopid )
+  if (  myimagingdf$haveSubjectTimePoint[bigct] > 0 &
+      ! is.na( loopid ) )
+    {
+    myid<-as.character(myimagingdf$INDDID[bigct])
+    if ( studytype =='thickness')
+      { # FIXME - should be more robust
+      ipttrn<-glob2rx(paste("*",locid,"*Thickness.nii.gz",sep=''))
+      warpfn<-Sys.glob(paste(basedir,"*/*/*",locid,
+        "*SubjectToGroupTemplateWarp.nii.gz",sep=''))
+      }
+    if ( studytype =='jacobian')
+      { # FIXME - should be more robust
+      ipttrn<-glob2rx(paste("*",locid,"*ToTemplateLogJacobian.nii.gz",sep=''))
+  afffn<-Sys.glob(paste(basedir,myid,'/',myid,"*SingleSubjectTemplate/T_templateSubjectToTemplate0GenericAffine.mat",sep='')) # FIXME - should be like imagelistfn
+  warpfn<-Sys.glob(paste(basedir,myid,'/',"*SingleSubjectTemplate/T_templateSubjectToTemplate1Warp.nii.gz",sep=''))# FIXME - should be like imagelistfn
+      }
+      imagelistfn<- paste(basedir,list.files(path=basedir,
+        pattern = ipttrn ,recursive=T),sep='/')
+      if ( file.exists(warpfn[1]) & file.exists(imagelistfn[1]) )
+      {
+      ct<-1
+      imagelist<-list()
+      for ( jfn in imagelistfn ) {
+        if ( studytype == 'jacobian' ) txlist<-c( warpfn, afffn )
+        if ( studytype != 'jacobian' ) txlist<-c( warpfn[ct] )
+        wout<-paste(outprefix,locid,'warped.nii.gz',sep='' )
+        if ( verbose ) print(wout)
+        countup<-countup+1
+        haveimg[bigct]<-1
+        if ( ! file.exists(wout) )
+          {
+          jimg<-antsImageRead( jfn, 3)
+          wimg<-antsApplyTransforms( fixed=temimg,
+            moving=jimg, transformlist=txlist)
+          SmoothImage(3,wimg,smoothingparam,wimg)
+          antsImageWrite( wimg , wout )
+          } else {
+          if ( verbose ) print(paste(locid,wout,'done'))
+    #      wimg<-antsImageRead( wout, 3 )
+          }
+        ct<-ct+1
+      }
+    }
+    }
+  bigct<-bigct+1
+  }
+#
+#if ( exists("brain") )
+#      plotANTsImage( brain, functional=list(corrs,ncorrs),
+#        threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
+#        outname=ofn, alpha=0.25)
+#
 ```
 
 Run the voxel-wise stats.
 
-```{r fig.width=8, fig.height=4, echo=TRUE}
-corrfns<-Sys.glob(paste(outprefix,"*corrs.nii.gz",sep=''))
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+if (  FALSE )
+{
 wimgfns<-Sys.glob(paste(outprefix,"*warped*.nii.gz",sep=''))
-lab<-48
+lab<-171
 tmask<-antsImageRead(testmaskfn,3)
 bmask<-antsImageClone( tmask )
 bmask[ bmask > 0 ]<-1
-tmask[ tmask != lab ]<-0
-tmask[ tmask == lab ]<-1
+tmask[ tmask != as.numeric(lab) ]<-0
+tmask[ tmask == as.numeric(lab) ]<-1
 sum(tmask==1)
 imglist<-imageFileNames2ImageList( wimgfns, 3 )
 imging<-imageListToMatrix( imglist, tmask )
 # should be a random effect but it's too slow
-fid<-as.factor( filtdf$myids )
-quadmodel<-I(filtdf$mydelt)^2
-quadmodel<-stats::poly( filtdf$mydelt, 2 )
-age<-rnorm(nrow(filtdf))
+subdf<-demog[haveimg==1,]
+fid<-as.factor( subdf$INDDID )
+tsb<-myimagingdf$timeSinceBaseline[haveimg==1]
+quadmodel<-I(tsb)^2
+quadmodel<-stats::poly( tsb, 1 )
+age<-demog$AgeatMRI[haveimg==1]
 mdl<-lm( imging ~ 1 + quadmodel + age + fid )
 mdlinterp<-bigLMStats( mdl , 1.e-4 )
-print( min(p.adjust(mdlinterp$beta.pval[1,],method='BH')) )
+print( min(p.adjust(mdlinterp$beta.pval[1,],method='BH'),na.rm=T) )
 ##### now do a lmer on the whole mat
-mdl<-lmer(rowMeans(imging)~1+quadmodel+(1|myids),data=filtdf)
+mdl<-lmer(rowSums(imging)~1+quadmodel*ClinicalPhenotype1
+  +(1|fid),data=subdf)
 print(summary(mdl))
 if ( FALSE ) # do voxelwise study
   {
@@ -204,7 +249,7 @@ if ( FALSE ) # do voxelwise study
     myform<-as.formula( paste("imging[,",as.character(i)
      ,"]~1+quadmodel+(1|myids)" ) )
     mdl<-lmer(myform,data=filtdf)
-    print(summary(mdl))
+    if ( verbose ) print(summary(mdl))
     }
   }
 # get rid of random effects
@@ -230,6 +275,7 @@ if ( FALSE )
   timg[tmask==1]<-1.0 - p.adjust( ttl, method='BH' )
   antsImageWrite(timg,'corrtstatL.nii.gz')
   }
+}
 ```
 
 
