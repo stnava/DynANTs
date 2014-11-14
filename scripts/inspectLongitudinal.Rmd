@@ -219,13 +219,16 @@ Run the voxel-wise stats.
 
 ```{r stats,fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
 wimgfns<-Sys.glob(paste(outprefix,"*","warped.nii.gz",sep=''))
-lab<-47
+lab<-0
 tmask<-antsImageRead(testmaskfn,3)
 bmask<-antsImageClone( tmask )
 bmask[ bmask > 0 ]<-1
+bmask[ bmask <= 0 ]<-0
+if ( lab > 0 ) {
 roimask<-antsImageClone( tmask )
 roimask[ roimask != as.numeric(lab) ]<-0
 roimask[ roimask == as.numeric(lab) ]<-1
+} else roimask<-antsImageClone(bmask)
 wout<-paste(outprefix,'bmask.nii.gz',sep='' )
 antsImageWrite(bmask,wout)
 wout<-paste(outprefix,'roimask.nii.gz',sep='' )
@@ -301,28 +304,57 @@ for ( j in 1:ncol(projs) ) {
     rownames(firstlevelmat)[ct]<-x
     ct<-ct+1
     }
-  eanat<-sparseDecom( inmatrix=firstlevelmat,
-      inmask=roimask, nvecs=5, its=3,
-      sparseness=0.1, smooth=0.0, cthresh=150)
-  pmat<-abs(imageListToMatrix(eanat$eig,roimask))
-  vecsums<-apply(pmat,FUN=sum,MARGIN=1)
-  pmat<-pmat/vecsums
-  projs<-( firstlevelmat %*%  t(pmat) )
   secondleveldemog<-subdf[tsb==0, ]
   mydx<-as.factor( secondleveldemog$ClinicalPhenotype1 )
   mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
   secondleveldemog<-cbind(secondleveldemog,DX=mydx)
-  myform<-as.formula( img ~ 1 + AgeatMRI +
-      DX +
+  myform<-as.formula( firstlevelmat ~ 1 + AgeatMRI +
+      LikelyTDP + Sex + ProfessionalCat_1 )
+  fullmdl<-lm( myform , data = secondleveldemog )
+  bigfullmdl<-bigLMStats( fullmdl, 1.e-5 )
+  betaout<-antsImageClone( bmask )
+  pv<-bigfullmdl$beta.pval["LikelyTDP",]
+  qv<-p.adjust(pv,method='BH')
+  qv[ is.na(qv)]<-1
+  betaout[roimask==1]<-1.0-qv
+  wout<-paste(outprefix,'qv.nii.gz',sep='' )
+  antsImageWrite(betaout,wout)
+  vizind<-which.min(qv)
+  locdf<-data.frame( img=firstlevelmat[,vizind], Sex=secondleveldemog$Sex,
+    Age=secondleveldemog$AgeatMRI,
+    Edu=as.factor(secondleveldemog$EducationCat),
+    Prof=as.factor(secondleveldemog$ProfessionalCat_1),
+    DX=secondleveldemog$DX,
+    TDP=as.factor(secondleveldemog$LikelyTDP) )
+  myform<-as.formula( img ~ 1 + Age +
+      TDP + Sex + Prof  )
+  fullmdl<-lm( myform , data = locdf )
+  visreg(fullmdl,'Age')
+  visreg(fullmdl,'TDP')
+  visreg(fullmdl,'Prof')
+  doEanat<-FALSE
+  if ( doEanat ) {
+    eanat<-sparseDecom( inmatrix=firstlevelmat,
+        inmask=roimask, nvecs=25, its=2,
+        sparseness=0.005, smooth=0.0, cthresh=150)
+    pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+    vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+    pmat<-pmat/vecsums
+    projs<-( firstlevelmat %*%  t(pmat) )
+    myform<-as.formula( img ~ 1 + AgeatMRI +
+      LikelyTDP +
       Sex + ProfessionalCat_1 )
-  for ( j in 1:1)
-    {
-    img<-projs[,j]
-    mdl<-lm( myform , data=(secondleveldemog))
-    if ( verbose == 1 ) print(summary(mdl))
+    for ( j in 1:ncol(projs))
+      {
+      img<-projs[,j]
+      mdl<-lm( myform , data=(secondleveldemog))
+      if ( verbose == 1 ) print(summary(mdl))
+      }
+    eseg<-eigSeg( roimask , eanat$eigenanatomyimages  )
+    wout<-paste(outprefix,'eseg.nii.gz',sep='' )
+    antsImageWrite(eseg,wout)
     }
 }
 ```
 
-
-Set up visualization.
+Set up visualization: see `antsSurfViz.sh`.
