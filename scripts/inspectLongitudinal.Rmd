@@ -294,32 +294,33 @@ for ( j in 1:ncol(projs) ) {
   ct<-1
   for ( x in mysubs ) {
     locmat<-imging[subdf$INDDID==x,  ]
-    loctime<-stats::poly(tsb[subdf$INDDID==x],2)
+    loctime<-stats::poly(tsb[subdf$INDDID==x],1)
     mdl<-lm( locmat  ~ loctime )  
     mdl<-bigLMStats( mdl, 0.00001 )
-    firstlevelmat[ct,]<-colSums(abs(mdl$beta))
+    firstlevelmat[ct,]<-((mdl$beta))
     rownames(firstlevelmat)[ct]<-x
     ct<-ct+1
     }
-    eanat<-sparseDecom( inmatrix=firstlevelmat,
+  eanat<-sparseDecom( inmatrix=firstlevelmat,
       inmask=roimask, nvecs=5, its=3,
       sparseness=0.1, smooth=0.0, cthresh=150)
-    pmat<-abs(imageListToMatrix(eanat$eig,roimask))
-    vecsums<-apply(pmat,FUN=sum,MARGIN=1)
-    pmat<-pmat/vecsums
-    projs<-( firstlevelmat %*%  t(pmat) )
+  pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+  vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+  pmat<-pmat/vecsums
+  projs<-( firstlevelmat %*%  t(pmat) )
   secondleveldemog<-subdf[tsb==0, ]
   mydx<-as.factor( secondleveldemog$ClinicalPhenotype1 )
   mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
   secondleveldemog<-cbind(secondleveldemog,DX=mydx)
   myform<-as.formula( img ~ 1 + AgeatMRI +
-    DX +
-    Sex + ProfessionalCat_1 )
-  for ( j in 1:ncol(projs)) {
+      DX +
+      Sex + ProfessionalCat_1 )
+  for ( j in 1:1)
+    {
     img<-projs[,j]
     mdl<-lm( myform , data=(secondleveldemog))
     if ( verbose == 1 ) print(summary(mdl))
-  }
+    }
 }
 ```
 
