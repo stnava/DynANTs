@@ -15,7 +15,8 @@ library(nlme)
 library(lmerTest)
 library(packHV)
 library(lattice)
-verbose<-FALSE
+library(visreg)
+verbose<-1
 ##############################
 ##############################
 ```
@@ -43,20 +44,20 @@ for ( i in 1:nrow(demog) )
     '/',expectedImagePrefix[i],"*",sep=''))
   if ( length(findfn) > 0) haveSubjectTimePoint[i]<-TRUE
   }
-if ( verbose ) print(sum(haveSubjectTimePoint))
+if ( verbose > 1 )  print(sum(haveSubjectTimePoint))
 demog<-cbind(demog,expectedImagePrefix=expectedImagePrefix,
   haveSubjectTimePoint=haveSubjectTimePoint)
 ```
 
 Define study imaging parameters
 ```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
-studytype<-c('jacobian','thickness')[2]
+studytype<-c('jacobian','thickness')[1]
 outprefix<-paste('/Users/stnava/Downloads/LongitudinalX/temp/FTD_Stats_',studytype,sep='')
 # get all of these paths / filenames right ....
 maskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/masks/templateBrainMaskProbability.nii.gz"
 testmaskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/labels/antsMalfLabels.nii.gz"
-if ( ! file.exists(maskfn) ) if ( verbose ) print(paste(maskfn,'doesnt exist'))
-if ( ! file.exists(testmaskfn) ) if ( verbose ) print(paste(testmaskfn,'doesnt exist'))
+if ( ! file.exists(maskfn) ) if ( verbose > 1 )  print(paste(maskfn,'doesnt exist'))
+if ( ! file.exists(testmaskfn) ) if ( verbose > 1 )  print(paste(testmaskfn,'doesnt exist'))
 temimg<-antsImageRead(maskfn,3)
 smoothingparam<-2.0 # smoothing before stats
 ```
@@ -83,10 +84,9 @@ for ( x in demog$expectedImagePrefix  )
   }
 if ( sd( ncolslist[ !is.na(ncolslist) ] ) > 0 )
   stop("different n columns in some files")
-csvdf<-matrix( rep(NA, ncolslist[ !is.na(ncolslist) ][1]*nrow(demog) ),
-  nrow=nrow(demog) )
+csvdf<-data.frame(matrix( rep(NA, ncolslist[ !is.na(ncolslist) ][1]*nrow(demog) ),
+  nrow=nrow(demog) ))
 colnames(csvdf)<-colnames(tempcsv)
-myimagingdf <-data.frame( demog,csvdf  )
 ct<-1
 for ( x in demog$expectedImagePrefix  )
   {
@@ -95,11 +95,12 @@ for ( x in demog$expectedImagePrefix  )
     {
     csvs[ct]<-temp
     tempcsv<-read.csv(temp)
-    myimagingdf[ct,2:ncol(myimagingdf)]<-tempcsv
+    csvdf[ct,]<-tempcsv[1,]
     ncolslist[ct]<-ncol(tempcsv)
     }
   ct<-ct+1
   }
+myimagingdf <-data.frame( demog, csvdf  )
 ```
 
 ```{r derka, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
@@ -135,15 +136,15 @@ plot(p)
 ```
 
 ```{r firstplot, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
-for ( jj in 16:19 )
+for ( jj in 19:22 )
   {
   imging<-myimagingdf[,jj]
   myform<-as.formula( paste("imging~timeSinceBaseline+(1|INDDID)" ) )
   mxf<-lmer(myform,data=myimagingdf)
   smxf<-summary(mxf)
-  if ( verbose ) print(smxf)
+  if ( verbose == 1 )  print(smxf)
   locallabel<-colnames(myimagingdf)[jj]
-  if ( verbose ) print(paste(locallabel))
+  if ( verbose > 1 )  print(paste(locallabel))
   p<-ggplot(data=myimagingdf , aes( x = timeSinceBaseline,
     y = imging, group = INDDID )) +
     geom_line()  + geom_point() + ggtitle(locallabel)
@@ -185,7 +186,7 @@ for ( loopid in demog$expectedImagePrefix )
         if ( studytype == 'jacobian' ) txlist<-c( warpfn, afffn )
         if ( studytype != 'jacobian' ) txlist<-c( warpfn[ct] )
         wout<-paste(outprefix,locid,'warped.nii.gz',sep='' )
-        if ( verbose ) print(wout)
+        if ( verbose > 1 )  print(wout)
         countup<-countup+1
         haveimg[bigct]<-1
         if ( ! file.exists(wout) )
@@ -196,7 +197,7 @@ for ( loopid in demog$expectedImagePrefix )
           SmoothImage(3,wimg,smoothingparam,wimg)
           antsImageWrite( wimg , wout )
           } else {
-          if ( verbose ) print(paste(locid,wout,'done'))
+          if ( verbose > 1 )  print(paste(locid,wout,'done'))
     #      wimg<-antsImageRead( wout, 3 )
           }
         ct<-ct+1
@@ -215,11 +216,11 @@ for ( loopid in demog$expectedImagePrefix )
 
 Run the voxel-wise stats.
 
-```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
-if (  FALSE )
+```{r stats,fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+if (  TRUE )
 {
-wimgfns<-Sys.glob(paste(outprefix,"*warped*.nii.gz",sep=''))
-lab<-171
+wimgfns<-Sys.glob(paste(outprefix,"*","warped.nii.gz",sep=''))
+lab<-147
 tmask<-antsImageRead(testmaskfn,3)
 bmask<-antsImageClone( tmask )
 bmask[ bmask > 0 ]<-1
@@ -232,16 +233,20 @@ imging<-imageListToMatrix( imglist, tmask )
 subdf<-demog[haveimg==1,]
 fid<-as.factor( subdf$INDDID )
 tsb<-myimagingdf$timeSinceBaseline[haveimg==1]
-quadmodel<-I(tsb)^2
 quadmodel<-stats::poly( tsb, 1 )
+quadmodel<-I(tsb)^2
 age<-demog$AgeatMRI[haveimg==1]
-mdl<-lm( imging ~ 1 + quadmodel + age + fid )
+mdl<-lm( (imging) ~ 1 + Education + age +
+  quadmodel*ClinicalPhenotype1 , data=subdf )
 mdlinterp<-bigLMStats( mdl , 1.e-4 )
-print( min(p.adjust(mdlinterp$beta.pval[1,],method='BH'),na.rm=T) )
+for (  i in 1:nrow(mdlinterp$beta.pval) ) {
+  print( rownames(mdlinterp$beta.pval)[i] )
+  print( min(p.adjust(mdlinterp$beta.pval[i,],method='fdr'),na.rm=T) )
+}
 ##### now do a lmer on the whole mat
-mdl<-lmer(rowSums(imging)~1+quadmodel*ClinicalPhenotype1
-  +(1|fid),data=subdf)
-print(summary(mdl))
+mdl<-lmer( (imging[,999]) ~ 1 + AgeatMRI + Education +
+ quadmodel*ClinicalPhenotype1+(1|fid), data=subdf )
+if ( verbose == 1 ) print(summary(mdl))
 if ( FALSE ) # do voxelwise study
   {
   for ( i in 1:ncol(imging))
@@ -249,12 +254,12 @@ if ( FALSE ) # do voxelwise study
     myform<-as.formula( paste("imging[,",as.character(i)
      ,"]~1+quadmodel+(1|myids)" ) )
     mdl<-lmer(myform,data=filtdf)
-    if ( verbose ) print(summary(mdl))
+    if ( verbose == 1 )  print(summary(mdl))
     }
   }
 # get rid of random effects
-# myform<-as.formula( paste("imging~1+(1|myids)" ) )
-# rimging<-residuals( lmer(myform,data=filtdf),type = c("response" ))
+# myform<-as.formula( paste("imging~1+(1|fid)" ) )
+# rimging<-residuals( lmer(myform,data=demog),type = c("response" ))
 # derka
 # then do standard bigLMStats
 # mylm<-lm( rimging ~  )
