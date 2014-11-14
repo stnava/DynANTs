@@ -8,6 +8,7 @@ Compare results of your local ANTs processing to a set of reference results
 
 ```{r fig.width=8, fig.height=4, echo=FALSE}
 library(ANTsR)
+library(plyr)
 library(ggplot2)
 library(date)
 library(lme4)
@@ -217,68 +218,107 @@ for ( loopid in demog$expectedImagePrefix )
 Run the voxel-wise stats.
 
 ```{r stats,fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
-if (  TRUE )
-{
 wimgfns<-Sys.glob(paste(outprefix,"*","warped.nii.gz",sep=''))
-lab<-147
+lab<-47
 tmask<-antsImageRead(testmaskfn,3)
 bmask<-antsImageClone( tmask )
 bmask[ bmask > 0 ]<-1
-tmask[ tmask != as.numeric(lab) ]<-0
-tmask[ tmask == as.numeric(lab) ]<-1
-sum(tmask==1)
+roimask<-antsImageClone( tmask )
+roimask[ roimask != as.numeric(lab) ]<-0
+roimask[ roimask == as.numeric(lab) ]<-1
+wout<-paste(outprefix,'bmask.nii.gz',sep='' )
+antsImageWrite(bmask,wout)
+wout<-paste(outprefix,'roimask.nii.gz',sep='' )
+antsImageWrite(roimask,wout)
+sum(roimask==1)
 imglist<-imageFileNames2ImageList( wimgfns, 3 )
-imging<-imageListToMatrix( imglist, tmask )
-# should be a random effect but it's too slow
+imging<-imageListToMatrix( imglist, roimask )
 subdf<-demog[haveimg==1,]
 fid<-as.factor( subdf$INDDID )
 tsb<-myimagingdf$timeSinceBaseline[haveimg==1]
 quadmodel<-stats::poly( tsb, 1 )
-quadmodel<-I(tsb)^2
-age<-demog$AgeatMRI[haveimg==1]
-mdl<-lm( (imging) ~ 1 + Education + age +
-  quadmodel*ClinicalPhenotype1 , data=subdf )
-mdlinterp<-bigLMStats( mdl , 1.e-4 )
-for (  i in 1:nrow(mdlinterp$beta.pval) ) {
-  print( rownames(mdlinterp$beta.pval)[i] )
-  print( min(p.adjust(mdlinterp$beta.pval[i,],method='fdr'),na.rm=T) )
-}
-##### now do a lmer on the whole mat
-mdl<-lmer( (imging[,999]) ~ 1 + AgeatMRI + Education +
- quadmodel*ClinicalPhenotype1+(1|fid), data=subdf )
-if ( verbose == 1 ) print(summary(mdl))
-if ( FALSE ) # do voxelwise study
-  {
-  for ( i in 1:ncol(imging))
-    {
-    myform<-as.formula( paste("imging[,",as.character(i)
-     ,"]~1+quadmodel+(1|myids)" ) )
-    mdl<-lmer(myform,data=filtdf)
-    if ( verbose == 1 )  print(summary(mdl))
+
+doMixedEffects<-FALSE
+if (  doMixedEffects )
+{
+# eanat on baseline images
+eanat<-sparseDecom(
+  inmatrix=imging[subdf$timeSinceBaseline==0,],
+  inmask=roimask, nvecs=5,
+  its=3, sparseness=0.1, smooth=0.0, cthresh=150)
+pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+pmat<-pmat/vecsums
+projs<-( imging %*%  t(pmat) )
+mydx<-as.factor( subdf$ClinicalPhenotype1 )
+mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
+for ( j in 1:ncol(projs) ) {
+  locdf<-data.frame( img=projs[,j], Sex=subdf$Sex,
+    Age=subdf$AgeatMRI, Edu=as.factor(subdf$EducationCat),
+    Prof=as.factor(subdf$ProfessionalCat_1), dTime=tsb,
+    DX=mydx,
+    TDP=as.factor(subdf$LikelyTDP), sId=as.factor(fid) )
+  myform<-as.formula( img ~ 1 + Age + dTime:TDP +
+    Sex + Edu + Prof+ (1|sId) )
+  mdl<-lmer( myform , data=(locdf))
+  if ( verbose == 1 ) print(summary(mdl))
+  getStat<-function( mdlIn ) {
+    summdl<-summary(mdlIn)
+    smk<-4
+    if ( dim(summdl$coeff)[2] > (smk) ) {
+#      return( (summdl$coeff[smk,4])*(-1) )
+     return( (summdl$coeff[smk,4]-summdl$coeff[smk+1,4])*(1) )
+     } else return(0)
     }
+  basestat<-getStat( mdl )
+  pct<-0
+  for ( i in 1:100 ) {
+    sampdf<-locdf
+    for ( x in unique(locdf$sId) ) {
+      loctdp<-locdf$TDP[ locdf$sId ==x ]  
+      if ( !is.na(loctdp[1]) )
+        sampdf$TDP[ locdf$sId == x ]<-sample(levels(locdf$TDP))[1]
+      }
+    mdl<-lmer( myform , data=sampdf)
+    permstat<-getStat(mdl)
+    if ( permstat > basestat ) pct<-pct+1
+    print(paste(i,pct,permstat))
   }
-# get rid of random effects
-# myform<-as.formula( paste("imging~1+(1|fid)" ) )
-# rimging<-residuals( lmer(myform,data=demog),type = c("response" ))
-# derka
-# then do standard bigLMStats
-# mylm<-lm( rimging ~  )
-# bigLMStats
-if ( FALSE )
-  {
-  ttg<-rep(0,ncol(corrmat))
-  ttl<-rep(0,ncol(corrmat))
-  for ( i in 1:ncol(corrmat))
-    {
-    ttg[i]<-t.test(corrmat[,i],alternative = "g")$p.value
-    ttl[i]<-t.test(corrmat[,i],alternative = "l")$p.value
+}
+} else { # do two level stats
+# first get individual level stats for each subject
+  mysubs<-unique(subdf$INDDID[tsb==0])
+  matvals<-rep(0,ncol(imging)*length(mysubs))
+  firstlevelmat<-matrix( matvals, nrow=length(mysubs) )
+  rownames(firstlevelmat)<-rep("",length(mysubs))
+  ct<-1
+  for ( x in mysubs ) {
+    locmat<-imging[subdf$INDDID==x,  ]
+    loctime<-stats::poly(tsb[subdf$INDDID==x],2)
+    mdl<-lm( locmat  ~ loctime )  
+    mdl<-bigLMStats( mdl, 0.00001 )
+    firstlevelmat[ct,]<-colSums(abs(mdl$beta))
+    rownames(firstlevelmat)[ct]<-x
+    ct<-ct+1
     }
-  timg<-antsImageClone(tmask)
-  timg[tmask==1]<-1.0 - p.adjust( ttg, method='BH' )
-  antsImageWrite(timg,'corrtstatG.nii.gz')
-  timg<-antsImageClone(tmask)
-  timg[tmask==1]<-1.0 - p.adjust( ttl, method='BH' )
-  antsImageWrite(timg,'corrtstatL.nii.gz')
+    eanat<-sparseDecom( inmatrix=firstlevelmat,
+      inmask=roimask, nvecs=5, its=3,
+      sparseness=0.1, smooth=0.0, cthresh=150)
+    pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+    vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+    pmat<-pmat/vecsums
+    projs<-( firstlevelmat %*%  t(pmat) )
+  secondleveldemog<-subdf[tsb==0, ]
+  mydx<-as.factor( secondleveldemog$ClinicalPhenotype1 )
+  mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
+  secondleveldemog<-cbind(secondleveldemog,DX=mydx)
+  myform<-as.formula( img ~ 1 + AgeatMRI +
+    DX +
+    Sex + ProfessionalCat_1 )
+  for ( j in 1:ncol(projs)) {
+    img<-projs[,j]
+    mdl<-lm( myform , data=(secondleveldemog))
+    if ( verbose == 1 ) print(summary(mdl))
   }
 }
 ```
