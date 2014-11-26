@@ -103,7 +103,7 @@ if ( ! exists("myroidf") )
     # not fast but is clear and safe
     spc<-antsGetSpacing(roi)
     volelt<-spc[1]*spc[2]*spc[3]
-    tempfn<-paste(outdir,x,'.csv',sep='')
+    tempfn<-paste(outdir,"/",x,'.csv',sep='')
     ImageMath(3,tempfn,"LabelStats",roi,thk)
     roivals<-read.csv(tempfn)
     colct<-1
@@ -131,12 +131,14 @@ if ( ! exists("myroidf") )
 
 Let's quickly investigate these results.
 ```{r vizcorrs}
-pheatmap(cor(myroidf))
-pheatmap(cor(myroidfThickness))
-pheatmap(cor(myroidfArea))
-pheatmap(cor(myroidf,myroidfThickness))
-pheatmap(cor(myroidf,myroidfArea))
-pheatmap(cor(myroidfThickness,myroidfArea))
+  myroidf[ myroidf == 0 ]<-NA
+  myroidfThickness[ myroidfThickness == 0 ]<-NA
+  myroidfArea[ myroidfArea == 0 ]<-NA
+  meanthk<-rowMeans(myroidfThickness,na.rm=T)
+  meanvol<-rowMeans(myroidf,na.rm=T)
+  meanare<-rowMeans(myroidfArea,na.rm=T)
+  print(cor.test(meanthk,meanvol))
+  pheatmap(antsrimpute(cor(data.matrix(myroidfArea))))
 ```
 
 Set up visualization: see `antsSurfViz.sh`.
