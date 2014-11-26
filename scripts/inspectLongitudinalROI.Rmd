@@ -1,0 +1,360 @@
+---
+title: "ANTs longitudinal cortical thickness statistics: Region of interest version"
+output: pdf_document
+---
+
+# Objective
+Use regions of interest gained by multi-atlas labeling (MAL) to perform longitudinal statistics.
+
+```{r fig.width=8, fig.height=4, echo=FALSE}
+library(ANTsR)
+library(plyr)
+library(ggplot2)
+library(date)
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(packHV)
+library(lattice)
+library(visreg)
+verbose<-1
+##############################
+##############################
+```
+
+Define study demographic parameters.  
+We use the demographics file to construct
+the expected image file prefix.
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE,error=FALSE}
+### Most important thing - load a csv
+### location of subject directories
+basedir<-"/Users/stnava/Downloads/LongitudinalX/antslongct/"
+demog<-read.csv(paste(basedir,'../FTD_Long_Nov_2014.csv',sep='/'))
+expectedImagePrefix<-rep("NA",nrow(demog))
+haveSubjectTimePoint<-rep(FALSE,nrow(demog))
+for ( i in 1:nrow(demog) )
+  {
+  myid<-demog$INDDID[i]
+  rawdate<-as.character(demog$MRIDate[i])
+  rawdatesplit<-unlist(strsplit(rawdate,'/'))
+  locyear<-rawdatesplit[3]
+  locmon<-rawdatesplit[1]
+  locday<-rawdatesplit[2]
+  expectedImagePrefix[i]<-paste(myid,'_',locyear,locmon,locday,sep='')
+  findfn<-Sys.glob(paste(basedir,'/',myid,
+    '/',expectedImagePrefix[i],"*",sep=''))
+  if ( length(findfn) > 0) haveSubjectTimePoint[i]<-TRUE
+  }
+if ( verbose > 1 )  print(sum(haveSubjectTimePoint))
+demog<-cbind(demog,expectedImagePrefix=expectedImagePrefix,
+  haveSubjectTimePoint=haveSubjectTimePoint)
+```
+
+Define study imaging parameters
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+studytype<-c('jacobian','thickness')[1]
+outprefix<-paste('/Users/stnava/Downloads/LongitudinalX/temp/FTD_Stats_',studytype,sep='')
+# get all of these paths / filenames right ....
+maskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/masks/templateBrainMaskProbability.nii.gz"
+testmaskfn<-"/Users/stnava/Downloads/LongitudinalX/pennTemplate/labels/antsMalfLabels.nii.gz"
+if ( ! file.exists(maskfn) ) if ( verbose > 1 )  print(paste(maskfn,'doesnt exist'))
+if ( ! file.exists(testmaskfn) ) if ( verbose > 1 )  print(paste(testmaskfn,'doesnt exist'))
+temimg<-antsImageRead(maskfn,3)
+smoothingparam<-2.0 # smoothing before stats
+```
+
+Now do the preprocessing
+
+Get the csv summary files.
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+csvs<-c()
+csvs<-rep(NA,nrow(demog))
+ncolslist<-rep(NA,nrow(demog))
+ct<-1
+for ( x in demog$expectedImagePrefix  )
+  {
+  temp<-Sys.glob(paste(basedir,"*/*/",x,"*MPR*brainvols.csv",sep=''))
+  if ( length(temp) > 0 )
+    {
+    csvs[ct]<-temp
+    tempcsv<-read.csv(temp)
+    ncolslist[ct]<-ncol(tempcsv)
+    }
+  if ( length(temp) > 1 ) stop(paste("multi-match error",x))
+  ct<-ct+1
+  }
+if ( sd( ncolslist[ !is.na(ncolslist) ] ) > 0 )
+  stop("different n columns in some files")
+csvdf<-data.frame(matrix( rep(NA, ncolslist[ !is.na(ncolslist) ][1]*nrow(demog) ),
+  nrow=nrow(demog) ))
+colnames(csvdf)<-colnames(tempcsv)
+ct<-1
+for ( x in demog$expectedImagePrefix  )
+  {
+  temp<-Sys.glob(paste(basedir,"*/*/",x,"*MPR*brainvols.csv",sep=''))
+  if ( length(temp) > 0 )
+    {
+    csvs[ct]<-temp
+    tempcsv<-read.csv(temp)
+    csvdf[ct,]<-tempcsv[1,]
+    ncolslist[ct]<-ncol(tempcsv)
+    }
+  ct<-ct+1
+  }
+myimagingdf <-data.frame( demog, csvdf  )
+```
+
+```{r derka, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+mydelt<-rep(NA,nrow(demog))
+ct<-2 # start here b/c we check one back
+while ( ct <= nrow(myimagingdf ) )
+  {
+  if ( demog$INDDID[ct] == demog$INDDID[ct-1] &
+       ! is.na(demog$INDDID[ct]) )
+    {
+    basect<-which( demog$INDDID == demog$INDDID[ct] )[1]
+    allct<-which( demog$INDDID == demog$INDDID[ct] )
+    demog$AgeatMRI[ allct ]<-demog$AgeatMRI[basect]
+    mydelt[basect]<-0
+    dt1<-as.character( demog$MRIDate[ct] )
+    dt2<-as.character( demog$MRIDate[basect] )
+    mydelt[ct]<-as.date(dt1,order='mdy')-
+                as.date(dt2,order='mdy')
+    }
+  ct<-ct+1
+  }
+```
+
+```{r derka2, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+myimagingdf<-cbind(myimagingdf,INDDID=demog$INDDID,timeSinceBaseline=mydelt)
+```
+
+
+```{r fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+p<-ggplot(data=myimagingdf , aes( x = timeSinceBaseline, y = BVOL,
+  group = INDDID )) +   geom_line()  + geom_point()
+plot(p)
+```
+
+```{r firstplot, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+for ( jj in 19:22 )
+  {
+  imging<-myimagingdf[,jj]
+  myform<-as.formula( paste("imging~timeSinceBaseline+(1|INDDID)" ) )
+  mxf<-lmer(myform,data=myimagingdf)
+  smxf<-summary(mxf)
+  if ( verbose == 1 )  print(smxf)
+  locallabel<-colnames(myimagingdf)[jj]
+  if ( verbose > 1 )  print(paste(locallabel))
+  p<-ggplot(data=myimagingdf , aes( x = timeSinceBaseline,
+    y = imging, group = INDDID )) +
+    geom_line()  + geom_point() + ggtitle(locallabel)
+  plot(p)
+}
+````
+
+
+```{r derka4, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+bigct<-1
+countup<-0
+haveimg<-rep(0,nrow(demog))
+for ( loopid in demog$expectedImagePrefix )
+  {
+  locid<-as.character( loopid )
+  if (  myimagingdf$haveSubjectTimePoint[bigct] > 0 &
+      ! is.na( loopid ) )
+    {
+    myid<-as.character(myimagingdf$INDDID[bigct])
+    if ( studytype =='thickness')
+      { # FIXME - should be more robust
+      ipttrn<-glob2rx(paste("*",locid,"*Thickness.nii.gz",sep=''))
+      warpfn<-Sys.glob(paste(basedir,"*/*/*",locid,
+        "*SubjectToGroupTemplateWarp.nii.gz",sep=''))
+      }
+    if ( studytype =='jacobian')
+      { # FIXME - should be more robust
+      ipttrn<-glob2rx(paste("*",locid,"*ToTemplateLogJacobian.nii.gz",sep=''))
+  afffn<-Sys.glob(paste(basedir,myid,'/',myid,"*SingleSubjectTemplate/T_templateSubjectToTemplate0GenericAffine.mat",sep='')) # FIXME - should be like imagelistfn
+  warpfn<-Sys.glob(paste(basedir,myid,'/',"*SingleSubjectTemplate/T_templateSubjectToTemplate1Warp.nii.gz",sep=''))# FIXME - should be like imagelistfn
+      }
+      imagelistfn<- paste(basedir,list.files(path=basedir,
+        pattern = ipttrn ,recursive=T),sep='/')
+      if ( file.exists(warpfn[1]) & file.exists(imagelistfn[1]) )
+      {
+      ct<-1
+      imagelist<-list()
+      for ( jfn in imagelistfn ) {
+        if ( studytype == 'jacobian' ) txlist<-c( warpfn, afffn )
+        if ( studytype != 'jacobian' ) txlist<-c( warpfn[ct] )
+        wout<-paste(outprefix,locid,'warped.nii.gz',sep='' )
+        if ( verbose > 1 )  print(wout)
+        countup<-countup+1
+        haveimg[bigct]<-1
+        if ( ! file.exists(wout) )
+          {
+          jimg<-antsImageRead( jfn, 3)
+          wimg<-antsApplyTransforms( fixed=temimg,
+            moving=jimg, transformlist=txlist)
+          SmoothImage(3,wimg,smoothingparam,wimg)
+          antsImageWrite( wimg , wout )
+          } else {
+          if ( verbose > 1 )  print(paste(locid,wout,'done'))
+    #      wimg<-antsImageRead( wout, 3 )
+          }
+        ct<-ct+1
+      }
+    }
+    }
+  bigct<-bigct+1
+  }
+#
+#if ( exists("brain") )
+#      plotANTsImage( brain, functional=list(corrs,ncorrs),
+#        threshold="0.8x1",slices="40x190x5",color=c("red","blue"),
+#        outname=ofn, alpha=0.25)
+#
+```
+
+Run the voxel-wise stats.
+
+```{r stats,fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+wimgfns<-Sys.glob(paste(outprefix,"*","warped.nii.gz",sep=''))
+lab<-0
+tmask<-antsImageRead(testmaskfn,3)
+bmask<-antsImageClone( tmask )
+bmask[ bmask > 0 ]<-1
+bmask[ bmask <= 0 ]<-0
+if ( lab > 0 ) {
+roimask<-antsImageClone( tmask )
+roimask[ roimask != as.numeric(lab) ]<-0
+roimask[ roimask == as.numeric(lab) ]<-1
+} else roimask<-antsImageClone(bmask)
+wout<-paste(outprefix,'bmask.nii.gz',sep='' )
+antsImageWrite(bmask,wout)
+wout<-paste(outprefix,'roimask.nii.gz',sep='' )
+antsImageWrite(roimask,wout)
+sum(roimask==1)
+imglist<-imageFileNames2ImageList( wimgfns, 3 )
+imging<-imageListToMatrix( imglist, roimask )
+subdf<-demog[haveimg==1,]
+fid<-as.factor( subdf$INDDID )
+tsb<-myimagingdf$timeSinceBaseline[haveimg==1]
+quadmodel<-stats::poly( tsb, 1 )
+
+doMixedEffects<-FALSE
+if (  doMixedEffects )
+{
+# eanat on baseline images
+eanat<-sparseDecom(
+  inmatrix=imging[subdf$timeSinceBaseline==0,],
+  inmask=roimask, nvecs=5,
+  its=3, sparseness=0.1, smooth=0.0, cthresh=150)
+pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+pmat<-pmat/vecsums
+projs<-( imging %*%  t(pmat) )
+mydx<-as.factor( subdf$ClinicalPhenotype1 )
+mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
+for ( j in 1:ncol(projs) ) {
+  locdf<-data.frame( img=projs[,j], Sex=subdf$Sex,
+    Age=subdf$AgeatMRI, Edu=as.factor(subdf$EducationCat),
+    Prof=as.factor(subdf$ProfessionalCat_1), dTime=tsb,
+    DX=mydx,
+    TDP=as.factor(subdf$LikelyTDP), sId=as.factor(fid) )
+  myform<-as.formula( img ~ 1 + Age + dTime:TDP +
+    Sex + Edu + Prof+ (1|sId) )
+  mdl<-lmer( myform , data=(locdf))
+  if ( verbose == 1 ) print(summary(mdl))
+  getStat<-function( mdlIn ) {
+    summdl<-summary(mdlIn)
+    smk<-4
+    if ( dim(summdl$coeff)[2] > (smk) ) {
+#      return( (summdl$coeff[smk,4])*(-1) )
+     return( (summdl$coeff[smk,4]-summdl$coeff[smk+1,4])*(1) )
+     } else return(0)
+    }
+  basestat<-getStat( mdl )
+  pct<-0
+  for ( i in 1:100 ) {
+    sampdf<-locdf
+    for ( x in unique(locdf$sId) ) {
+      loctdp<-locdf$TDP[ locdf$sId ==x ]  
+      if ( !is.na(loctdp[1]) )
+        sampdf$TDP[ locdf$sId == x ]<-sample(levels(locdf$TDP))[1]
+      }
+    mdl<-lmer( myform , data=sampdf)
+    permstat<-getStat(mdl)
+    if ( permstat > basestat ) pct<-pct+1
+    print(paste(i,pct,permstat))
+  }
+}
+} else { # do two level stats
+# first get individual level stats for each subject
+  mysubs<-unique(subdf$INDDID[tsb==0])
+  matvals<-rep(0,ncol(imging)*length(mysubs))
+  firstlevelmat<-matrix( matvals, nrow=length(mysubs) )
+  rownames(firstlevelmat)<-rep("",length(mysubs))
+  ct<-1
+  for ( x in mysubs ) {
+    locmat<-imging[subdf$INDDID==x,  ]
+    loctime<-stats::poly(tsb[subdf$INDDID==x],1)
+    mdl<-lm( locmat  ~ loctime )  
+    mdl<-bigLMStats( mdl, 0.00001 )
+    firstlevelmat[ct,]<-((mdl$beta))
+    rownames(firstlevelmat)[ct]<-x
+    ct<-ct+1
+    }
+  secondleveldemog<-subdf[tsb==0, ]
+  mydx<-as.factor( secondleveldemog$ClinicalPhenotype1 )
+  mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
+  secondleveldemog<-cbind(secondleveldemog,DX=mydx)
+  myform<-as.formula( firstlevelmat ~ 1 + AgeatMRI +
+      LikelyTDP + Sex + ProfessionalCat_1 )
+  fullmdl<-lm( myform , data = secondleveldemog )
+  bigfullmdl<-bigLMStats( fullmdl, 1.e-5 )
+  betaout<-antsImageClone( bmask )
+  pv<-bigfullmdl$beta.pval["LikelyTDP",]
+  qv<-p.adjust(pv,method='BH')
+  qv[ is.na(qv)]<-1
+  betaout[roimask==1]<-1.0-qv
+  wout<-paste(outprefix,'qv.nii.gz',sep='' )
+  antsImageWrite(betaout,wout)
+  vizind<-which.min(qv)
+  locdf<-data.frame( img=firstlevelmat[,vizind], Sex=secondleveldemog$Sex,
+    Age=secondleveldemog$AgeatMRI,
+    Edu=as.factor(secondleveldemog$EducationCat),
+    Prof=as.factor(secondleveldemog$ProfessionalCat_1),
+    DX=secondleveldemog$DX,
+    TDP=as.factor(secondleveldemog$LikelyTDP) )
+  myform<-as.formula( img ~ 1 + Age +
+      TDP + Sex + Prof  )
+  fullmdl<-lm( myform , data = locdf )
+  visreg(fullmdl,'Age')
+  visreg(fullmdl,'TDP')
+  visreg(fullmdl,'Prof')
+  doEanat<-FALSE
+  if ( doEanat ) {
+    eanat<-sparseDecom( inmatrix=firstlevelmat,
+        inmask=roimask, nvecs=25, its=2,
+        sparseness=0.005, smooth=0.0, cthresh=150)
+    pmat<-abs(imageListToMatrix(eanat$eig,roimask))
+    vecsums<-apply(pmat,FUN=sum,MARGIN=1)
+    pmat<-pmat/vecsums
+    projs<-( firstlevelmat %*%  t(pmat) )
+    myform<-as.formula( img ~ 1 + AgeatMRI +
+      LikelyTDP +
+      Sex + ProfessionalCat_1 )
+    for ( j in 1:ncol(projs))
+      {
+      img<-projs[,j]
+      mdl<-lm( myform , data=(secondleveldemog))
+      if ( verbose == 1 ) print(summary(mdl))
+      }
+    eseg<-eigSeg( roimask , eanat$eigenanatomyimages  )
+    wout<-paste(outprefix,'eseg.nii.gz',sep='' )
+    antsImageWrite(eseg,wout)
+    }
+}
+```
+
+Set up visualization: see `antsSurfViz.sh`.
