@@ -189,4 +189,20 @@ for ( jj in 1:ncol(myroidfThickness) )
 ```
 
 
+Report some results
+```{r reportRegions}
+print("BV")
+print(paste(colnames(myroidf)[which.min(pvsBV)],
+  p.adjust(pvsBV)[which.min(pvsBV)]))
+print("SV")
+print(paste(colnames(myroidf)[which.min(pvsSV)],
+  p.adjust(pvsSV)[which.min(pvsSV)]))
+print("N")
+print(paste(colnames(myroidf)[which.min(pvsN)],
+  p.adjust(pvsN)[which.min(pvsN)]))
+print("LV")
+print(paste(colnames(myroidf)[which.min(pvsLV)],
+  p.adjust(pvsLV)[which.min(pvsLV)]))
+```
+
 Set up visualization: see `antsSurfViz.sh`.
