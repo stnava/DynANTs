@@ -24,6 +24,7 @@ setwd(basedir)
 data("DesikanKillianyTourville",package='ANTsR')
 outdir<-paste(basedir,'FTD_ROI_Long',sep='')
 dir.create(outdir, showWarnings = FALSE)
+thicknessStudy<-FALSE
 ##############################
 ##############################
 ```
@@ -154,9 +155,11 @@ pvsBV<-rep(NA,ncol(myroidf))
 pvsLV<-rep(NA,ncol(myroidf))
 pvsN<-rep(NA,ncol(myroidf))
 pvsSV<-rep(NA,ncol(myroidf))
-for ( jj in 1:ncol(myroidfThickness) )
+for ( jj in 1:ncol(myroidf) )
   {
-  imging<-myroidfThickness[,jj]
+  imging<-myroidf[,jj]
+  if ( thicknessStudy ) 
+    imging<-myroidfThickness[,jj]
   if ( ! any(is.na(imging)) )
   {
   locdf<-data.frame( img=imging, Sex=subdemog$Sex,
@@ -178,9 +181,11 @@ for ( jj in 1:ncol(myroidfThickness) )
   pvsSV[jj]<-smdl[10,5]
   locallabel<-colnames(myroidf)[jj]
   if ( verbose > 1 )  print(paste(locallabel))
-  p<-ggplot(data=locdf , aes( x = dTime,
-    y = img, group = sId )) +
-    geom_line()  + geom_point() + ggtitle(locallabel)
+  p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(DX)))
+
+#  p<-ggplot(data=locdf , aes( x = dTime,
+#    y = img, group = sId )) +
+#    geom_line()  + geom_point() + ggtitle(locallabel)
   plot(p)
 #  Sys.sleep(1)
   }
