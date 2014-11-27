@@ -150,6 +150,10 @@ subdemog<-demog[haveSubject,]
 mydx<-as.factor( subdemog$ClinicalPhenotype1 )
 mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
 subdemog<-cbind(subdemog,DX=mydx)
+pvsBV<-rep(NA,ncol(myroidf))
+pvsLV<-rep(NA,ncol(myroidf))
+pvsN<-rep(NA,ncol(myroidf))
+pvsSV<-rep(NA,ncol(myroidf))
 for ( jj in 1:ncol(myroidfThickness) )
   {
   imging<-myroidfThickness[,jj]
@@ -161,19 +165,24 @@ for ( jj in 1:ncol(myroidfThickness) )
     Prof=as.factor(subdemog$ProfessionalCat_1), 
     dTime=as.numeric(subdemog$DaysApart),
     DX=mydx,
-    TDP=as.factor(subdemog$LikelyTDP), 
+#    TDP=as.factor(subdemog$LikelyTDP), 
     sId=as.factor(subdemog$INDDID) )
-  myform<-as.formula( img ~ 1 + Age + dTime:TDP +
+  myform<-as.formula( img ~ 1 + Age + dTime:DX +
     Sex + Edu + Prof+ (1|sId) )
   mdl<-lmer( myform , data=(locdf))
   if ( verbose == 1 ) print(summary(mdl))
-  locallabel<-colnames(myroidfThickness)[jj]
+  smdl<-summary(mdl)$coeff
+  pvsBV[jj]<-smdl[7,5]
+  pvsLV[jj]<-smdl[8,5]
+  pvsN[jj]<-smdl[9,5]
+  pvsSV[jj]<-smdl[10,5]
+  locallabel<-colnames(myroidf)[jj]
   if ( verbose > 1 )  print(paste(locallabel))
   p<-ggplot(data=locdf , aes( x = dTime,
     y = img, group = sId )) +
     geom_line()  + geom_point() + ggtitle(locallabel)
   plot(p)
-  Sys.sleep(1)
+#  Sys.sleep(1)
   }
 }
 
