@@ -67,7 +67,8 @@ for ( x in demog$expectedImagePrefix  )
   {
   temp<-Sys.glob(paste(basedir,"Murray/*/*/*/",x,type1,sep=''))
   temp2<-Sys.glob(paste(basedir,"Murray/*/*/*",x,type2,sep=''))
-  if ( length(temp) > 0 & length(temp2) > 0 )
+  if ( length(temp) > 0 & length(temp2) > 0 & 
+         demog$DaysApart[ct] < (365*2.1) )
     {
     subjectct<-subjectct+1
     haveSubject[ct]<-TRUE
@@ -104,7 +105,8 @@ if ( ! exists("myroidf") )
     spc<-antsGetSpacing(roi)
     volelt<-spc[1]*spc[2]*spc[3]
     tempfn<-paste(outdir,"/",x,'.csv',sep='')
-    ImageMath(3,tempfn,"LabelStats",roi,thk)
+    if ( ! file.exists(tempfn) )
+      ImageMath(3,tempfn,"LabelStats",roi,thk)
     roivals<-read.csv(tempfn)
     colct<-1
     for ( anat in colnames(myroidf) )
@@ -138,7 +140,44 @@ Let's quickly investigate these results.
   meanvol<-rowMeans(myroidf,na.rm=T)
   meanare<-rowMeans(myroidfArea,na.rm=T)
   print(cor.test(meanthk,meanvol))
-  pheatmap(antsrimpute(cor(data.matrix(myroidfArea))))
+#  pheatmap(antsrimpute(cor(data.matrix(myroidfArea))))
 ```
+
+Run through the results with mixed effects modeling.
+
+```{r mixeff, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+subdemog<-demog[haveSubject,]
+mydx<-as.factor( subdemog$ClinicalPhenotype1 )
+mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
+subdemog<-cbind(subdemog,DX=mydx)
+for ( jj in 1:ncol(myroidfThickness) )
+  {
+  imging<-myroidfThickness[,jj]
+  if ( ! any(is.na(imging)) )
+  {
+  locdf<-data.frame( img=imging, Sex=subdemog$Sex,
+    Age=subdemog$AgeatMRI, 
+    Edu=as.factor(subdemog$EducationCat),
+    Prof=as.factor(subdemog$ProfessionalCat_1), 
+    dTime=as.numeric(subdemog$DaysApart),
+    DX=mydx,
+    TDP=as.factor(subdemog$LikelyTDP), 
+    sId=as.factor(subdemog$INDDID) )
+  myform<-as.formula( img ~ 1 + Age + dTime:TDP +
+    Sex + Edu + Prof+ (1|sId) )
+  mdl<-lmer( myform , data=(locdf))
+  if ( verbose == 1 ) print(summary(mdl))
+  locallabel<-colnames(myroidfThickness)[jj]
+  if ( verbose > 1 )  print(paste(locallabel))
+  p<-ggplot(data=locdf , aes( x = dTime,
+    y = img, group = sId )) +
+    geom_line()  + geom_point() + ggtitle(locallabel)
+  plot(p)
+  Sys.sleep(1)
+  }
+}
+
+```
+
 
 Set up visualization: see `antsSurfViz.sh`.
