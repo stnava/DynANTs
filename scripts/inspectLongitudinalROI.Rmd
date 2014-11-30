@@ -21,6 +21,7 @@ library(pheatmap)
 verbose<-1
 basedir<-"/Users/stnava/Downloads/LongitudinalX/"
 setwd(basedir)
+malf<-antsImageRead("pennTemplate/labels/antsMalfLabels.nii.gz",3)
 data("DesikanKillianyTourville",package='ANTsR')
 outdir<-paste(basedir,'FTD_ROI_Long',sep='')
 dir.create(outdir, showWarnings = FALSE)
@@ -147,14 +148,24 @@ Let's quickly investigate these results.
 Run through the results with mixed effects modeling.
 
 ```{r mixeff, fig.width=8, fig.height=4, echo=TRUE,warnings=FALSE,message=FALSE}
+# make an image to save results
+makevizimg<-function( m1 ) {
+  vizimg<-antsImageClone(m1);
+  vizimg[ vizimg > 0 ]<-0
+  return(vizimg)
+  }
 subdemog<-demog[haveSubject,]
 mydx<-as.factor( subdemog$ClinicalPhenotype1 )
 mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
 subdemog<-cbind(subdemog,DX=mydx)
 pvsBV<-rep(NA,ncol(myroidf))
+vizBV<-makevizimg( malf )
 pvsLV<-rep(NA,ncol(myroidf))
+vizLV<-makevizimg( malf )
 pvsN<-rep(NA,ncol(myroidf))
+vizN<-makevizimg( malf )
 pvsSV<-rep(NA,ncol(myroidf))
+vizSV<-makevizimg( malf )
 for ( jj in 1:ncol(myroidf) )
   {
   imging<-myroidf[,jj]
@@ -179,6 +190,11 @@ for ( jj in 1:ncol(myroidf) )
   pvsLV[jj]<-smdl[8,5]
   pvsN[jj]<-smdl[9,5]
   pvsSV[jj]<-smdl[10,5]
+  labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
+  vizBV[ malf == labnum ]<-1.0-pvsBV[jj]
+  vizLV[ malf == labnum ]<-1.0-pvsLV[jj]
+  vizN[ malf == labnum ]<-1.0-pvsN[jj]
+  vizSV[ malf == labnum ]<-1.0-pvsSV[jj]
   locallabel<-colnames(myroidf)[jj]
   if ( verbose > 1 )  print(paste(locallabel))
   p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(DX)))
@@ -196,18 +212,27 @@ for ( jj in 1:ncol(myroidf) )
 
 Report some results
 ```{r reportRegions}
-print("BV")
-print(paste(colnames(myroidf)[which.min(pvsBV)],
-  p.adjust(pvsBV)[which.min(pvsBV)]))
-print("SV")
-print(paste(colnames(myroidf)[which.min(pvsSV)],
-  p.adjust(pvsSV)[which.min(pvsSV)]))
-print("N")
-print(paste(colnames(myroidf)[which.min(pvsN)],
-  p.adjust(pvsN)[which.min(pvsN)]))
-print("LV")
-print(paste(colnames(myroidf)[which.min(pvsLV)],
-  p.adjust(pvsLV)[which.min(pvsLV)]))
+regionStats<-function( pvs, nm ) {
+  print(nm)
+  print(paste(colnames(myroidf)[which.min(pvs)],
+    p.adjust(pvs)[which.min(pvs)]))
+  qv<-p.adjust(pvs,'BH')
+  cth<-max( pvs[ qv <= 0.05 ] , na.rm=T)
+  print(paste("CriticalThresh",cth))
+  return(cth)
+}
+bvth<-regionStats( pvsBV, "BV")
+lvth<-regionStats( pvsLV, "LV")
+nth<-regionStats( pvsN, "N")
+svth<-regionStats( pvsSV, "SV")
 ```
 
 Set up visualization: see `antsSurfViz.sh`.
+```{r vizsurf}
+# write the images then do some system calls to antsSurf
+antsImageWrite(vizBV,'/tmp/malf_vizBV.nii.gz')
+antsImageWrite(vizLV,'/tmp/malf_vizLV.nii.gz')
+antsImageWrite(vizN,'/tmp/malf_vizN.nii.gz')
+antsImageWrite(vizSV,'/tmp/malf_vizSV.nii.gz')
+```
+
