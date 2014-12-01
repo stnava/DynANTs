@@ -160,29 +160,37 @@ mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
 subdemog<-cbind(subdemog,DX=mydx)
 pvsBV<-rep(NA,ncol(myroidf))
 vizBV<-makevizimg( malf )
+vizBVrate<-makevizimg( malf )
 pvsLV<-rep(NA,ncol(myroidf))
 vizLV<-makevizimg( malf )
+vizLVrate<-makevizimg( malf )
 pvsN<-rep(NA,ncol(myroidf))
 vizN<-makevizimg( malf )
+vizNrate<-makevizimg( malf )
 pvsSV<-rep(NA,ncol(myroidf))
 vizSV<-makevizimg( malf )
+vizSVrate<-makevizimg( malf )
+percentChangeByDX<-myroidf[1:length(levels(mydx)),]*0
+rownames(percentChangeByDX)<-levels(mydx)
+pvalsByDX<-myroidf[1:length(levels(mydx)),]*0
+rownames(pvalsByDX)<-levels(mydx)
 for ( jj in 1:ncol(myroidf) )
   {
   imging<-myroidf[,jj]
   if ( thicknessStudy ) 
-    imging<-myroidfThickness[,jj]
+    imging<-myroidfThickness[,jj]/myroidf[,jj]
   if ( ! any(is.na(imging)) )
   {
   locdf<-data.frame( img=imging, Sex=subdemog$Sex,
     Age=subdemog$AgeatMRI, 
     Edu=as.factor(subdemog$EducationCat),
     Prof=as.factor(subdemog$ProfessionalCat_1), 
-    dTime=as.numeric(subdemog$DaysApart),
+    dTime=as.numeric(subdemog$DaysApart)/365.0,
     DX=mydx,
 #    TDP=as.factor(subdemog$LikelyTDP), 
     sId=as.factor(subdemog$INDDID) )
   myform<-as.formula( img ~ 1 + Age + dTime:DX +
-    Sex + Edu + Prof+ (1|sId) )
+    Sex + Edu + Prof+ (1|sId) ) #  (1+dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
   if ( verbose == 1 ) print(summary(mdl))
   smdl<-summary(mdl)$coeff
@@ -190,49 +198,68 @@ for ( jj in 1:ncol(myroidf) )
   pvsLV[jj]<-smdl[8,5]
   pvsN[jj]<-smdl[9,5]
   pvsSV[jj]<-smdl[10,5]
-  labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
-  vizBV[ malf == labnum ]<-1.0-pvsBV[jj]
-  vizLV[ malf == labnum ]<-1.0-pvsLV[jj]
-  vizN[ malf == labnum ]<-1.0-pvsN[jj]
-  vizSV[ malf == labnum ]<-1.0-pvsSV[jj]
+  pvalsByDX[,jj]<-smdl[6:10,5]
   locallabel<-colnames(myroidf)[jj]
   if ( verbose > 1 )  print(paste(locallabel))
-  p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(DX)))
-
-#  p<-ggplot(data=locdf , aes( x = dTime,
-#    y = img, group = sId )) +
-#    geom_line()  + geom_point() + ggtitle(locallabel)
+  p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(DX))) + ggtitle(locallabel)
   plot(p)
-#  Sys.sleep(1)
+  fxf<-fixef(mdl)
+  percentChange<-(fxf[1]+fxf[grep("DX",names(fxf))])/fxf[1]
+  percentChangeByDX[,jj]<-(1.0-percentChange)*100
+  labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
+  vizBV[ malf == labnum ]<-1.0-pvsBV[jj]
+  vizBVrate[ malf == labnum ]<-percentChange[2]
+  vizLV[ malf == labnum ]<-1.0-pvsLV[jj]
+  vizLVrate[ malf == labnum ]<-percentChange[3]
+  vizN[ malf == labnum ]<-1.0-pvsN[jj]
+  vizNrate[ malf == labnum ]<-percentChange[4]
+  vizSV[ malf == labnum ]<-1.0-pvsSV[jj]
+  vizSVrate[ malf == labnum ]<-percentChange[5]
   }
 }
-
 ```
 
 
 Report some results
 ```{r reportRegions}
-regionStats<-function( pvs, nm ) {
+regionStats<-function( pvs, nm, pctchg ) {
   print(nm)
-  print(paste(colnames(myroidf)[which.min(pvs)],
-    p.adjust(pvs)[which.min(pvs)]))
+  mymin<-which.min(pvs)
+  print(paste(colnames(myroidf)[mymin],
+    p.adjust(pvs)[mymin]))
   qv<-p.adjust(pvs,'BH')
   cth<-max( pvs[ qv <= 0.05 ] , na.rm=T)
-  print(paste("CriticalThresh",cth))
+  print(paste("CriticalThresh",cth,"Rate",pctchg[mymin]))
   return(cth)
 }
-bvth<-regionStats( pvsBV, "BV")
-lvth<-regionStats( pvsLV, "LV")
-nth<-regionStats( pvsN, "N")
-svth<-regionStats( pvsSV, "SV")
+bvth<-regionStats( pvsBV, "BV", percentChangeByDX[2,])
+lvth<-regionStats( pvsLV, "LV", percentChangeByDX[3,])
+nth<-regionStats( pvsN, "N", percentChangeByDX[4,])
+svth<-regionStats( pvsSV, "SV", percentChangeByDX[5,])
 ```
+
 
 Set up visualization: see `antsSurfViz.sh`.
 ```{r vizsurf}
 # write the images then do some system calls to antsSurf
-antsImageWrite(vizBV,'/tmp/malf_vizBV.nii.gz')
-antsImageWrite(vizLV,'/tmp/malf_vizLV.nii.gz')
-antsImageWrite(vizN,'/tmp/malf_vizN.nii.gz')
-antsImageWrite(vizSV,'/tmp/malf_vizSV.nii.gz')
+opre<-paste(outdir,'/malf_viz_VOL',sep='')
+if ( thicknessStudy ) opre<-paste(outdir,'/malf_viz_TH',sep='')
+write.csv(percentChangeByDX,paste(opre,"Rates.csv",sep=''))
+write.csv(pvalsByDX,paste(opre,"PVals.csv",sep=''))
+antsImageWrite(vizBV,paste(opre,'BV.nii.gz',sep=''))
+antsImageWrite(vizBVrate,paste(opre,'BVrate.nii.gz',sep=''))
+antsImageWrite(vizLV,paste(opre,'LV.nii.gz',sep=''))
+antsImageWrite(vizLVrate,paste(opre,'LVrate.nii.gz',sep=''))
+antsImageWrite(vizN,paste(opre,'N.nii.gz',sep=''))
+antsImageWrite(vizNrate,paste(opre,'Nrate.nii.gz',sep=''))
+antsImageWrite(vizSV,paste(opre,'SV.nii.gz',sep=''))
+antsImageWrite(vizSVrate,paste(opre,'SVrate.nii.gz',sep=''))
 ```
 
+## Heatmap of all region atrophy rates
+
+```{r ratehm}
+modperc<-percentChangeByDX[, !is.na(colMeans(percentChangeByDX)) ]
+modperc[modperc < 0 | modperc > 8 ]<-0
+pheatmap( modperc )
+```
