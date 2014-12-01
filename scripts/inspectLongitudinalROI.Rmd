@@ -25,7 +25,7 @@ malf<-antsImageRead("pennTemplate/labels/antsMalfLabels.nii.gz",3)
 data("DesikanKillianyTourville",package='ANTsR')
 outdir<-paste(basedir,'FTD_ROI_Long',sep='')
 dir.create(outdir, showWarnings = FALSE)
-thicknessStudy<-FALSE
+thicknessStudy<-T
 ##############################
 ##############################
 ```
@@ -151,7 +151,7 @@ Run through the results with mixed effects modeling.
 # make an image to save results
 makevizimg<-function( m1 ) {
   vizimg<-antsImageClone(m1);
-  vizimg[ vizimg > 0 ]<-0
+  vizimg[ vizimg > -Inf ]<-0
   return(vizimg)
   }
 subdemog<-demog[haveSubject,]
@@ -159,17 +159,9 @@ mydx<-as.factor( subdemog$ClinicalPhenotype1 )
 mydx = factor(mydx,levels(mydx)[c(2,1,3,4,5)])
 subdemog<-cbind(subdemog,DX=mydx)
 pvsBV<-rep(NA,ncol(myroidf))
-vizBV<-makevizimg( malf )
-vizBVrate<-makevizimg( malf )
 pvsLV<-rep(NA,ncol(myroidf))
-vizLV<-makevizimg( malf )
-vizLVrate<-makevizimg( malf )
 pvsN<-rep(NA,ncol(myroidf))
-vizN<-makevizimg( malf )
-vizNrate<-makevizimg( malf )
 pvsSV<-rep(NA,ncol(myroidf))
-vizSV<-makevizimg( malf )
-vizSVrate<-makevizimg( malf )
 percentChangeByDX<-myroidf[1:length(levels(mydx)),]*0
 rownames(percentChangeByDX)<-levels(mydx)
 pvalsByDX<-myroidf[1:length(levels(mydx)),]*0
@@ -208,14 +200,15 @@ for ( jj in 1:ncol(myroidf) )
   percentChange<-(fxf[1]+fxf[grep("DX",names(fxf))])/fxf[1]
   percentChangeByDX[,jj]<-(1.0-percentChange)*100
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
-  vizBV[ malf == labnum ]<-1.0-pvsBV[jj]
-  vizBVrate[ malf == labnum ]<-percentChange[2]
-  vizLV[ malf == labnum ]<-1.0-pvsLV[jj]
-  vizLVrate[ malf == labnum ]<-percentChange[3]
-  vizN[ malf == labnum ]<-1.0-pvsN[jj]
-  vizNrate[ malf == labnum ]<-percentChange[4]
-  vizSV[ malf == labnum ]<-1.0-pvsSV[jj]
-  vizSVrate[ malf == labnum ]<-percentChange[5]
+  # selector<-malf == labnum
+  # vizBV[ selector ]<-1.0-pvsBV[jj]
+  # vizBVrate[ selector ]<-percentChange[2]
+  # vizLV[ selector ]<-1.0-pvsLV[jj]
+  # vizLVrate[ selector ]<-percentChange[3]
+  # vizN[ selector ]<-1.0-pvsN[jj]
+  # vizNrate[ selector ]<-percentChange[4]
+  # vizSV[ selector ]<-1.0-pvsSV[jj]
+  # vizSVrate[ selector ]<-percentChange[5]
   }
 }
 ```
@@ -245,8 +238,8 @@ Set up visualization: see `antsSurfViz.sh`.
 # write the images then do some system calls to antsSurf
 opre<-paste(outdir,'/malf_viz_VOL',sep='')
 if ( thicknessStudy ) opre<-paste(outdir,'/malf_viz_TH',sep='')
-write.csv(percentChangeByDX,paste(opre,"Rates.csv",sep=''))
-write.csv(pvalsByDX,paste(opre,"PVals.csv",sep=''))
+write.csv(percentChangeByDX,paste(opre,"Rates.csv",sep=''),row.names=F)
+write.csv(pvalsByDX,paste(opre,"PVals.csv",sep=''),row.names=F)
 antsImageWrite(vizBV,paste(opre,'BV.nii.gz',sep=''))
 antsImageWrite(vizBVrate,paste(opre,'BVrate.nii.gz',sep=''))
 antsImageWrite(vizLV,paste(opre,'LV.nii.gz',sep=''))
@@ -267,9 +260,27 @@ modpv<-pvalsByDX[, !is.na(colMeans(pvalsByDX)) ]
 qv<-matrix(p.adjust(data.matrix(modpv),'BH'),nrow=nrow(modpv))
 colnames(qv)<-colnames(pvalsByDX)[!is.na(colMeans(pvalsByDX))]
 rownames(qv)<-rownames(pvalsByDX)
-write.csv(qv,paste(opre,"QVals.csv",sep=''))
+write.csv(qv,paste(opre,"QVals.csv",sep=''),row.names=F)
 qrates<-percentChangeByDX[,!is.na(colMeans(pvalsByDX))]
 for ( k in 2:nrow(qv) ) {
   print(qrates[k,qv[k,]<0.06])
+  }
+```
+
+```{r makevizimgs}
+# for each reasonable region, map the rate to the malf image
+for ( k in 2:nrow(qv) ) {
+  vizimg<-makevizimg( malf )
+  siginds<-which( qv[k,] < 0.06 )
+  if ( length(siginds) > 0 )
+  for ( j in 1:length(siginds) )
+    {
+    nm<-names(siginds)[j]
+    labnum<-which(colnames(myroidf)==nm)
+    labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[labnum] )
+    vizimg[ malf == labnum ]<-qrates[k,siginds[j]]
+    }
+  onm<-paste(opre,rownames(qrates)[k],'Rate.nii.gz',sep='')
+  antsImageWrite(vizimg,onm)
   }
 ```
