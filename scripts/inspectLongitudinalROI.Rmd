@@ -173,6 +173,7 @@ vizSVrate<-makevizimg( malf )
 percentChangeByDX<-myroidf[1:length(levels(mydx)),]*0
 rownames(percentChangeByDX)<-levels(mydx)
 pvalsByDX<-myroidf[1:length(levels(mydx)),]*0
+pvalsByDX[]<-NA
 rownames(pvalsByDX)<-levels(mydx)
 for ( jj in 1:ncol(myroidf) )
   {
@@ -262,4 +263,13 @@ antsImageWrite(vizSVrate,paste(opre,'SVrate.nii.gz',sep=''))
 modperc<-percentChangeByDX[, !is.na(colMeans(percentChangeByDX)) ]
 modperc[modperc < 0 | modperc > 8 ]<-0
 pheatmap( modperc )
+modpv<-pvalsByDX[, !is.na(colMeans(pvalsByDX)) ]
+qv<-matrix(p.adjust(data.matrix(modpv),'BH'),nrow=nrow(modpv))
+colnames(qv)<-colnames(pvalsByDX)[!is.na(colMeans(pvalsByDX))]
+rownames(qv)<-rownames(pvalsByDX)
+write.csv(qv,paste(opre,"QVals.csv",sep=''))
+qrates<-percentChangeByDX[,!is.na(colMeans(pvalsByDX))]
+for ( k in 2:nrow(qv) ) {
+  print(qrates[k,qv[k,]<0.06])
+  }
 ```
