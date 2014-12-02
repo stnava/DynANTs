@@ -198,6 +198,8 @@ for ( jj in 1:ncol(myroidf) )
     sId=as.factor(subdemog$INDDID) )
   myform<-as.formula( img ~ 1 + Age + Sex + Edu +
     dTime*poi_DX + (1+dTime|sId) ) 
+  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
+    poi_DX + dTime:poi_DX + (1+dTime|sId) ) # better?
   #  (1+dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
@@ -239,8 +241,9 @@ for ( jj in 1:ncol(myroidf) )
   if ( verbose > 1 )  print(paste(locallabel))
 ###############################################################
 ###### ggplot for final study##################################
-################################################################  p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(DX))) + ggtitle(locallabel)
-#  plot(p)
+################################################################  
+p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
+plot(p)
 ###############################################################
 ###############################################################
   }
@@ -270,7 +273,7 @@ for ( i in 1:nrow(pvalsByDX) )
   {
   regionStats( as.numeric(pvalsByDX[i,]), 
                rownames(pvalsByDX)[i], 
-               percentChangeByDX[i,])
+               as.numeric(percentChangeByDX[i,]) )
   }
 ```
 
@@ -287,17 +290,19 @@ write.csv(pvalsByDX,paste(opre,"PVals.csv",sep=''),row.names=F)
 ## Heatmap of all region atrophy rates
 
 ```{r ratehm}
-modperc<-percentChangeByDX[, !is.na(colMeans(percentChangeByDX)) ]
+modperc<-percentChangeByDX[, ] # !is.na(colMeans(percentChangeByDX)) 
 # modperc[modperc < 0 | modperc > 8 ]<-0
-pheatmap( modperc )
-modpv<-pvalsByDX[, !is.na(colMeans(pvalsByDX)) ]
+# pheatmap( modperc )
+modpv<-pvalsByDX[,  ]# !is.na(colMeans(pvalsByDX))
 qv<-matrix(p.adjust(data.matrix(modpv),method="BH"),nrow=nrow(modpv))
 colnames(qv)<-colnames(pvalsByDX)[!is.na(colMeans(pvalsByDX))]
 rownames(qv)<-rownames(pvalsByDX)
 write.csv(qv,paste(opre,"QVals.csv",sep=''),row.names=F)
 qrates<-percentChangeByDX[,!is.na(colMeans(pvalsByDX))]
 for ( k in 2:nrow(qv) ) {
-  print(qrates[k,qv[k,]<=qvThresh])
+  slct<-( qv[k,]<=qvThresh )
+  slct[is.na(slct)]<-FALSE
+  print(qrates[k,slct])
   }
 ```
 
@@ -305,7 +310,9 @@ for ( k in 2:nrow(qv) ) {
 # for each reasonable region, map the rate to the malf image
 for ( k in 1:nrow(qv) ) {
   vizimg<-makevizimg( malf )
-  siginds<-which( qv[k,] <= qvThresh )
+  slct<-( qv[k,]<=qvThresh )
+  slct[is.na(slct)]<-FALSE
+  siginds<-which( slct )
   if ( length(siginds) > 0 )
   for ( j in 1:length(siginds) )
     {
