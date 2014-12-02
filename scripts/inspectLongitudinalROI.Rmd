@@ -295,10 +295,10 @@ modperc<-percentChangeByDX[, ] # !is.na(colMeans(percentChangeByDX))
 # pheatmap( modperc )
 modpv<-pvalsByDX[,  ]# !is.na(colMeans(pvalsByDX))
 qv<-matrix(p.adjust(data.matrix(modpv),method="BH"),nrow=nrow(modpv))
-colnames(qv)<-colnames(pvalsByDX)[!is.na(colMeans(pvalsByDX))]
+colnames(qv)<-colnames(pvalsByDX)# [!is.na(colMeans(pvalsByDX))]
 rownames(qv)<-rownames(pvalsByDX)
 write.csv(qv,paste(opre,"QVals.csv",sep=''),row.names=F)
-qrates<-percentChangeByDX[,!is.na(colMeans(pvalsByDX))]
+qrates<-percentChangeByDX# [,!is.na(colMeans(pvalsByDX))]
 for ( k in 2:nrow(qv) ) {
   slct<-( qv[k,]<=qvThresh )
   slct[is.na(slct)]<-FALSE
