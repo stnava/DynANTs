@@ -192,15 +192,15 @@ for ( jj in 1:ncol(myroidf) )
       as.numeric(subdemog$GraduateCat)), 
     Edu=antsrimpute(as.numeric(subdemog$Education)),
     LongTime=as.numeric((as.numeric(subdemog$MonthsDuration)/12.0)>6.5),
-    dTime=as.numeric(subdemog$MonthsDuration)/12.0,
+    poi_dTime=as.numeric(subdemog$MonthsDuration)/12.0,
     poi_DX=mydx,
     poi_LTDP=ltdp, 
     sId=as.factor(subdemog$INDDID) )
   myform<-as.formula( img ~ 1 + Age + Sex + Edu +
-    dTime*poi_DX + (1+dTime|sId) ) 
-  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
-    poi_DX + dTime:poi_DX + (1+dTime|sId) ) # better?
-  #  (1+dTime|sId) random slope + intercept
+    poi_dTime*poi_DX + (1+poi_dTime|sId) ) 
+#  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
+#    poi_DX + poi_dTime:poi_DX + (1+poi_dTime|sId) ) # better?
+  #  (1+poi_dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
   if ( verbose == 1 ) {
@@ -242,7 +242,7 @@ for ( jj in 1:ncol(myroidf) )
 ###############################################################
 ###### ggplot for final study##################################
 ################################################################  
-p<-ggplot(locdf, aes( x = dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
+p<-ggplot(locdf, aes( x = poi_dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
 plot(p)
 ###############################################################
 ###############################################################
@@ -254,12 +254,13 @@ plot(p)
 Report some results
 ```{r reportRegions}
 qvThresh<-0.05
+myMeth<-"BH"
 regionStats<-function( pvs, nm, pctchg ) {
   print(nm)
   mymin<-which.min(pvs)
   print(paste(colnames(myroidf)[mymin],
-    p.adjust(pvs)[mymin]))
-  qv<-p.adjust(pvs,'BH')
+    p.adjust(pvs,myMeth)[mymin]))
+  qv<-p.adjust(pvs,myMeth)
   if ( sum(qv <= qvThresh , na.rm=T ) >= 1 ) {
     cth<-max( pvs[ qv <= qvThresh ] , na.rm=T)
     print(paste("CriticalThresh",cth,"Rate",pctchg[mymin]))
@@ -294,7 +295,11 @@ modperc<-percentChangeByDX[, ] # !is.na(colMeans(percentChangeByDX))
 # modperc[modperc < 0 | modperc > 8 ]<-0
 # pheatmap( modperc )
 modpv<-pvalsByDX[,  ]# !is.na(colMeans(pvalsByDX))
-qv<-matrix(p.adjust(data.matrix(modpv),method="BH"),nrow=nrow(modpv))
+qv<-data.matrix(modpv)
+# maybe this is too conservative ... correcting the full matrix?
+# qv<-matrix(p.adjust(data.matrix(modpv),method=myMeth),nrow=nrow(modpv))
+for ( i in 1:nrow(qv) )
+  qv[i,]<-p.adjust(as.numeric(modpv[i,]),method=myMeth)
 colnames(qv)<-colnames(pvalsByDX)# [!is.na(colMeans(pvalsByDX))]
 rownames(qv)<-rownames(pvalsByDX)
 write.csv(qv,paste(opre,"QVals.csv",sep=''),row.names=F)
