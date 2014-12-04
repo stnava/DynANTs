@@ -18,6 +18,7 @@ library(packHV)
 library(lattice)
 library(visreg)
 library(pheatmap)
+library(effects)
 verbose<-1
 basedir<-"/Users/stnava/Downloads/LongitudinalX/"
 setwd(basedir)
@@ -28,6 +29,7 @@ dir.create(outdir, showWarnings = FALSE)
 thicknessStudy<-F
 ##############################
 ##############################
+if ( ! exists("p") ) doggplot<-TRUE
 ```
 
 Define study demographic parameters.  
@@ -68,11 +70,13 @@ type2<-"*CorticalThickness.nii.gz"
 subjectct<-0
 haveSubject<-rep(FALSE,length(demog$expectedImagePrefix))
 ct<-1
+demog$Use[   is.na(demog$Use) ]<-0
 for ( x in demog$expectedImagePrefix  )
   {
   temp<-Sys.glob(paste(basedir,"Murray/*/*/*/",x,type1,sep=''))
   temp2<-Sys.glob(paste(basedir,"Murray/*/*/*",x,type2,sep=''))
-  if ( length(temp) > 0 & length(temp2) > 0 ) 
+  if ( length(temp) > 0 & length(temp2) > 0 )# & 
+#     ( demog$Use[ct] == 1 | demog$Use[ct] == 2 ) )
 #         demog$DaysBetweenMRI[ct] < (365*2.1) )
     {
     subjectct<-subjectct+1
@@ -186,22 +190,34 @@ for ( jj in 1:ncol(myroidf) )
   }
   ltdp<-as.factor(subdemog$LikelyTDP)
 #  ltdp[is.na(ltdp)]<-as.factor("0")
+# do this in order to make time more interpretable wrt quadratic
+  timevar<-as.numeric(subdemog$MonthsDuration)/12.0
+  timevar<-timevar-mean(timevar)
   locdf<-data.frame( img=imging, Sex=subdemog$Sex,
     Age=subdemog$FTDageOnset, 
     ProfEdu=antsrimpute(as.numeric(subdemog$ProfessionalCat)+
       as.numeric(subdemog$GraduateCat)), 
     Edu=antsrimpute(as.numeric(subdemog$Education)),
-    LongTime=as.numeric((as.numeric(subdemog$MonthsDuration)/12.0)>6.5),
-    poi_dTime=as.numeric(subdemog$MonthsDuration)/12.0,
-    poi_DX=mydx,
+    poi_dTime=timevar,
+    dT2=I(timevar^2),
+    poi_DX=(mydx),
     poi_LTDP=ltdp, 
     sId=as.factor(subdemog$INDDID) )
-  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
-    poi_dTime*poi_DX + (1+poi_dTime|sId) ) 
+  myform<-as.formula( img ~ 1 + Age + Sex + ProfEdu +
+    poi_dTime*poi_DX + dT2*poi_DX + (1+poi_dTime|sId) ) 
 #  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
 #    poi_DX + poi_dTime:poi_DX + (1+poi_dTime|sId) ) # better?
   #  (1+poi_dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
+  if ( doggplot  ) {
+#    plot( effect("poi_DX",mdl))
+#    plot( effect("poi_dTime*poi_DX",mdl))
+    locdf2=locdf
+    locdf2$img<-residuals( lmer( img ~  (1+poi_dTime|sId), data=locdf ))
+    myform2<-as.formula( img ~ 1 + Age + Sex + Edu + poi_dTime*poi_DX) 
+    mdl2<-lm( myform2 , data=(locdf2))
+    visreg(mdl2,"poi_dTime",by='poi_DX')
+  }
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
   if ( verbose == 1 ) {
     print(DesikanKillianyTourville$LabelName[jj])
@@ -242,8 +258,10 @@ for ( jj in 1:ncol(myroidf) )
 ###############################################################
 ###### ggplot for final study##################################
 ################################################################  
+if ( doggplot  ) {
 p<-ggplot(locdf, aes( x = poi_dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
 plot(p)
+}
 ###############################################################
 ###############################################################
   }
@@ -315,6 +333,7 @@ for ( k in 2:nrow(qv) ) {
 # for each reasonable region, map the rate to the malf image
 for ( k in 1:nrow(qv) ) {
   vizimg<-makevizimg( malf )
+  bvizimg<-makevizimg( malf )
   slct<-( qv[k,]<=qvThresh )
   slct[is.na(slct)]<-FALSE
   siginds<-which( slct )
@@ -325,10 +344,15 @@ for ( k in 1:nrow(qv) ) {
     labnum<-which(colnames(myroidf)==nm)
     labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[labnum] )
     lqrt<-qrates[k,siginds[j]]
+    lbeta<-betasByDX[k,siginds[j]]*(-1)
     if (lqrt < 0) lqrt<-0
     vizimg[ malf == labnum ]<-lqrt
+    bvizimg[ malf == labnum ]<-lbeta
     }
   onm<-paste(opre,rownames(qrates)[k],'Rate.nii.gz',sep='')
   antsImageWrite(vizimg,onm)
+  onm<-paste(opre,rownames(betasByDX)[k],'Beta.nii.gz',sep='')
+  antsImageWrite(bvizimg,onm)
+  print(max(bvizimg))
   }
 ```
