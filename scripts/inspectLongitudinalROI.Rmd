@@ -169,6 +169,13 @@ pvsN<-rep(NA,ncol(myroidf))
 pvsSV<-rep(NA,ncol(myroidf))
 usedx<-levels(mydx)[c(1,3,5,7)] # FIXME 
 rm("percentChangeByDX","pvalsByDX")
+bvol<-rowSums(  myroidf[  , !is.na(colMeans(myroidf)) ]  )
+bvol<-bvol/mean(bvol)
+for ( sid in subdemog$INDDID ) 
+  {
+  bvol[  subdemog$INDDID==sid ]<-
+        max( bvol[  subdemog$INDDID==sid ] )
+  }
 for ( jj in 1:ncol(myroidf) )
   {
   imging<-myroidf[,jj]
@@ -177,7 +184,6 @@ for ( jj in 1:ncol(myroidf) )
   if ( ! any(is.na(imging)) )
   {
   # take care of age issue / allow study of controls
-  if ( TRUE ) {
   for ( sid in subdemog$INDDID ) 
     {
     if ( any( is.na(subdemog$FTDageOnset[  subdemog$INDDID==sid ]) ) )
@@ -187,12 +193,14 @@ for ( jj in 1:ncol(myroidf) )
        as.numeric( (subdemog$AgeatMRI[  subdemog$INDDID==sid ])-
         min(subdemog$AgeatMRI[  subdemog$INDDID==sid ]) )*12.0
     }
-  }
-  ltdp<-as.factor(subdemog$LikelyTDP)
-#  ltdp[is.na(ltdp)]<-as.factor("0")
+  ltdp<-as.numeric(subdemog$LikelyTDP)
+  ltdp<-ltdp+1
+  ltdp[is.na(ltdp)]<-0 # these are controls
+  ltdp<-as.factor(ltdp)
 # do this in order to make time more interpretable wrt quadratic
   timevar<-as.numeric(subdemog$MonthsDuration)/12.0
-  timevar<-timevar-mean(timevar)
+  timevar[ timevar>6 ]<-NA
+  timevar<-timevar-mean(timevar,na.rm=T)
   locdf<-data.frame( img=imging, Sex=subdemog$Sex,
     Age=subdemog$FTDageOnset, 
     ProfEdu=antsrimpute(as.numeric(subdemog$ProfessionalCat)+
@@ -201,31 +209,37 @@ for ( jj in 1:ncol(myroidf) )
     poi_dTime=timevar,
     dT2=I(timevar^2),
     poi_DX=(mydx),
-    poi_LTDP=ltdp, 
+    poi_LTDP=ltdp, bvol=bvol,
     sId=as.factor(subdemog$INDDID) )
-  myform<-as.formula( img ~ 1 + Age + Sex + ProfEdu +
+  myform<-as.formula( img ~ bvol + Age + Sex + ProfEdu +
     poi_dTime*poi_DX + dT2*poi_DX + (1+poi_dTime|sId) ) 
 #  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
 #    poi_DX + poi_dTime:poi_DX + (1+poi_dTime|sId) ) # better?
   #  (1+poi_dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
+  locallabel<-colnames(myroidf)[jj]
+  if ( verbose == 1 ) {
+    print(DesikanKillianyTourville$LabelName[jj])
+    print(summary(mdl))  
+    print(paste(locallabel))
+    }
   if ( doggplot  ) {
 #    plot( effect("poi_DX",mdl))
 #    plot( effect("poi_dTime*poi_DX",mdl))
     locdf2=locdf
-    locdf2$img<-residuals( lmer( img ~  (1+poi_dTime|sId), data=locdf ))
-    myform2<-as.formula( img ~ 1 + Age + Sex + Edu + poi_dTime*poi_DX) 
+    rr<-residuals( lmer( img ~  (1+poi_dTime|sId), data=locdf ))
+    locdf2$img[as.numeric(names(rr))]<-rr
+    myform2<-as.formula( img ~ bvol + Age + Sex + Edu + poi_dTime*poi_DX) 
     mdl2<-lm( myform2 , data=(locdf2))
-    visreg(mdl2,"poi_dTime",by='poi_DX')
+    visreg(mdl2,"poi_dTime",by='poi_DX',main=locallabel)
   }
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
-  if ( verbose == 1 ) {
-    print(DesikanKillianyTourville$LabelName[jj])
-    print(summary(mdl))
-    }
   smdl<-summary(mdl)$coeff
+  if ( ncol(smdl) > 3 )
+  {
   fxf<-fixef(mdl)
-  baseval<-(fxf[1]+mean(locdf$Age)*fxf[grep("Age",names(fxf))]
+  baseval<-(fxf[1]+ mean(locdf$bvol)*fxf[grep("bvol",names(fxf))]
+            + mean(locdf$Age)*fxf[grep("Age",names(fxf))]
             + 0.5 *fxf[grep("Sex",names(fxf))] )
   percentChange<-(baseval+fxf[grep("poi_",names(fxf))])/baseval
   if ( ! exists("percentChangeByDX") )
@@ -253,18 +267,17 @@ for ( jj in 1:ncol(myroidf) )
     }
   pvalsByDX[,jj]<-smdl[poiInds,5] # FIXME
   betasByDX[,jj]<-smdl[poiInds,1] # FIXME
-  locallabel<-colnames(myroidf)[jj]
-  if ( verbose > 1 )  print(paste(locallabel))
 ###############################################################
 ###### ggplot for final study##################################
 ################################################################  
-if ( doggplot  ) {
-p<-ggplot(locdf, aes( x = poi_dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
-plot(p)
-}
-###############################################################
-###############################################################
+  if ( doggplot  ) {
+    p<-ggplot(locdf, aes( x = poi_dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
+    plot(p)
+    }
+  } # smdl ncol
   }
+###############################################################
+###############################################################
 }
 ```
 
@@ -272,7 +285,7 @@ plot(p)
 Report some results
 ```{r reportRegions}
 qvThresh<-0.05
-myMeth<-"BH"
+myMeth<-"bonf"
 regionStats<-function( pvs, nm, pctchg ) {
   print(nm)
   mymin<-which.min(pvs)
@@ -353,6 +366,6 @@ for ( k in 1:nrow(qv) ) {
   antsImageWrite(vizimg,onm)
   onm<-paste(opre,rownames(betasByDX)[k],'Beta.nii.gz',sep='')
   antsImageWrite(bvizimg,onm)
-  print(max(bvizimg))
   }
+print(paste("TODO: Mean_Diffusion_Labels && TDP_3_Group"))
 ```
