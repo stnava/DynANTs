@@ -26,7 +26,7 @@ malf<-antsImageRead("pennTemplate/labels/antsMalfLabels.nii.gz",3)
 data("DesikanKillianyTourville",package='ANTsR')
 outdir<-paste(basedir,'FTD_ROI_Long',sep='')
 dir.create(outdir, showWarnings = FALSE)
-thicknessStudy<-F
+thicknessStudy<-T
 ##############################
 ##############################
 if ( ! exists("p") ) doggplot<-TRUE
@@ -211,30 +211,33 @@ for ( jj in 1:ncol(myroidf) )
     poi_DX=(mydx),
     poi_LTDP=ltdp, bvol=bvol,
     sId=as.factor(subdemog$INDDID) )
-  myform<-as.formula( img ~ bvol + Age + Sex + ProfEdu +
-    poi_dTime*poi_DX + dT2*poi_DX + (1+poi_dTime|sId) ) 
+  myform<-as.formula( img ~ bvol + Age + Sex + Edu +
+    poi_dTime*poi_DX + dT2*poi_DX  + (1|sId) ) 
 #  myform<-as.formula( img ~ 1 + Age + Sex + Edu +
 #    poi_DX + poi_dTime:poi_DX + (1+poi_dTime|sId) ) # better?
   #  (1+poi_dTime|sId) random slope + intercept
   mdl<-lmer( myform , data=(locdf))
   locallabel<-colnames(myroidf)[jj]
+  smdl<-summary(mdl)$coeff
   if ( verbose == 1 ) {
     print(DesikanKillianyTourville$LabelName[jj])
-    print(summary(mdl))  
+    print(smdl)  
     print(paste(locallabel))
     }
   if ( doggplot  ) {
 #    plot( effect("poi_DX",mdl))
 #    plot( effect("poi_dTime*poi_DX",mdl))
     locdf2=locdf
-    rr<-residuals( lmer( img ~  (1+poi_dTime|sId), data=locdf ))
+    rr<-residuals( lmer( img ~  (1|sId), data=locdf ))
     locdf2$img[as.numeric(names(rr))]<-rr
-    myform2<-as.formula( img ~ bvol + Age + Sex + Edu + poi_dTime*poi_DX) 
+    locdf$img[as.numeric(names(rr))]<-rr
+    myform2<-as.formula( img ~ 1 + Age + Sex + Edu + poi_dTime*poi_DX) 
     mdl2<-lm( myform2 , data=(locdf2))
     visreg(mdl2,"poi_dTime",by='poi_DX',main=locallabel)
+    p<-ggplot(locdf, aes( x = poi_dTime , y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
+    plot(p)
   }
   labnum<-as.numeric( DesikanKillianyTourville$LabelNumber[jj] )
-  smdl<-summary(mdl)$coeff
   if ( ncol(smdl) > 3 )
   {
   fxf<-fixef(mdl)
@@ -267,13 +270,6 @@ for ( jj in 1:ncol(myroidf) )
     }
   pvalsByDX[,jj]<-smdl[poiInds,5] # FIXME
   betasByDX[,jj]<-smdl[poiInds,1] # FIXME
-###############################################################
-###### ggplot for final study##################################
-################################################################  
-  if ( doggplot  ) {
-    p<-ggplot(locdf, aes( x = poi_dTime ,y = img, group = sId)) +  geom_line() + geom_smooth(aes(group = 1), method="lm", size = 2, se = T) + geom_point(aes(colour = factor(poi_DX))) + ggtitle(locallabel)
-    plot(p)
-    }
   } # smdl ncol
   }
 ###############################################################
