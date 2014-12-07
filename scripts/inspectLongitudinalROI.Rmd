@@ -27,7 +27,7 @@ data("DesikanKillianyTourville",package='ANTsR')
 myRoiDescriptor<-DesikanKillianyTourville
 outdir<-paste(basedir,'FTD_ROI_Long',sep='')
 dir.create(outdir, showWarnings = FALSE)
-studytype<-c("Volume","Thickness","MD")[3]
+studytype<-c("Volume","Thickness","MD")[1]
 if ( studytype == 'MD' ) {
   myRoiDescriptor<-data.frame( 
     LabelNumber=as.numeric(1:1000),
