@@ -168,9 +168,7 @@ if ( ! exists("myroidf") )
     # not fast but is clear and safe
     spc<-antsGetSpacing(roi)
     volelt<-spc[1]*spc[2]*spc[3]
-    typeXT<-'Cort'
-    if ( studytype == 'MD' ) typeXT<-'MD'
-    tempfn<-paste(outdir,"/",x,typeXT,'.csv',sep='')
+    tempfn<-paste(outdir,"/",x,studytype,'.csv',sep='')
     if ( ! file.exists(tempfn) )
       ImageMath(3,tempfn,"LabelStats",roi,thk)
     roivals<-read.csv(tempfn)
